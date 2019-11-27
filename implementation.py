@@ -137,35 +137,42 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         for i in range(0, image_size, step):
             for j in range(0, image_size, step):
-                # Get the voxel coordinate X
-                voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
-                                     volume_center[0]
+                value_max = 0
+                for k in range(-100, 100, 10):
+                    # Get the voxel coordinate X
+                    voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
+                                         volume_center[0] + k * view_vector[0]
 
-                # Get the voxel coordinate Y
-                voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
-                                     volume_center[1]
+                    # Get the voxel coordinate Y
+                    voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
+                                         volume_center[1] + k * view_vector[1]
 
-                # Let's try getting the vector of Zs out of Volume.data with coordinates x and y
-                voxel_array = get_z_voxels(volume, voxel_coordinate_x, voxel_coordinate_y);
-                value = np.max(voxel_array)
+                    # Get the voxel coordinate Z
+                    voxel_coordinate_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + \
+                                         volume_center[2] + k * view_vector[2]
 
-                # Normalize value to be between 0 and 1
-                red = value / volume_maximum
-                green = red
-                blue = red
-                alpha = 1.0 if red > 0 else 0.0
+                    # Get voxel value
+                    value = get_voxel(volume, voxel_coordinate_x, voxel_coordinate_y, voxel_coordinate_z)
+                    if (value > value_max):
+                        value_max = value
 
-                # Compute the color value (0...255)
-                red = math.floor(red * 255) if red < 255 else 255
-                green = math.floor(green * 255) if green < 255 else 255
-                blue = math.floor(blue * 255) if blue < 255 else 255
-                alpha = math.floor(alpha * 255) if alpha < 255 else 255
+                    # Normalize value to be between 0 and 1
+                    red = value_max / volume_maximum
+                    green = red
+                    blue = red
+                    alpha = 1.0 if red > 0 else 0.0
 
-                # Assign color to the pixel i, j
-                image[(j * image_size + i) * 4] = red
-                image[(j * image_size + i) * 4 + 1] = green
-                image[(j * image_size + i) * 4 + 2] = blue
-                image[(j * image_size + i) * 4 + 3] = alpha
+                    # Compute the color value (0...255)
+                    red = math.floor(red * 255) if red < 255 else 255
+                    green = math.floor(green * 255) if green < 255 else 255
+                    blue = math.floor(blue * 255) if blue < 255 else 255
+                    alpha = math.floor(alpha * 255) if alpha < 255 else 255
+
+                    # Assign color to the pixel i, j
+                    image[(j * image_size + i) * 4] = red
+                    image[(j * image_size + i) * 4 + 1] = green
+                    image[(j * image_size + i) * 4 + 2] = blue
+                    image[(j * image_size + i) * 4 + 3] = alpha
 
     # TODO: Implement Compositing function. TFColor is already imported. self.tfunc is the current transfer function.
     def render_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
