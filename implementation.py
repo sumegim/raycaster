@@ -6,7 +6,51 @@ from collections.abc import ValuesView
 import math
 
 
-# TODO: Implement trilinear interpolation
+def single_trilinear_interpolation(point: np.ndarray, vertices: np.ndarray):
+    """
+    Retrieves the interpolated value of a 3D point from the surrounding points.
+    :param point: The 3D point for which we want to calculate the linearly interpolated value, with shape (3,)
+    :param vertices: Array of all points surrounding the point of interest, with shape (8, 3)
+        8 points of a cube and 3 dimensions (x, y, z, value) for each vertex.
+    :return: Interpolated value
+    """
+    # Get vertex to start all calculations
+    base_vertex = vertices[0]
+    other_vertices = vertices[1:]
+
+    # Boolean arrays that indicates vertices on same axis
+    same_x = other_vertices[:, 0] == base_vertex[0]
+    same_y = other_vertices[:, 1] == base_vertex[1]
+    same_z = other_vertices[:, 2] == base_vertex[2]
+
+    # Vertices for alpha, beta & gamma computation
+    alpha_vertex = other_vertices[~same_x &  same_y &  same_z].flatten()
+    beta_vertex =  other_vertices[ same_x & ~same_y &  same_z].flatten()
+    gamma_vertex = other_vertices[ same_x &  same_y & ~same_z].flatten()
+
+    # Alpha, beta & gamma
+    alpha = (point[0] - base_vertex[0]) / (alpha_vertex[0] - base_vertex[0])
+    beta = (point[1] - base_vertex[1]) / (beta_vertex[1] - base_vertex[1])
+    gamma = (point[2] - base_vertex[2]) / (gamma_vertex[2] - base_vertex[2])
+
+    # Other vertices needed, opposite to vertices identified before
+    opp_alpha_vertex = other_vertices[ same_x & ~same_y & ~same_z].flatten()
+    opp_beta_vertex =  other_vertices[~same_x &  same_y & ~same_z].flatten()
+    opp_gamma_vertex = other_vertices[~same_x & ~same_y &  same_z].flatten()
+    opp_base_vertex =  other_vertices[~same_x & ~same_y & ~same_z].flatten()
+
+    final_value = base_vertex[3]      * (1 - alpha) * (1 - beta) * (1 - gamma) + \
+                  alpha_vertex[3]     * (    alpha) * (1 - beta) * (1 - gamma) + \
+                  beta_vertex[3]      * (1 - alpha) * (    beta) * (1 - gamma) + \
+                  gamma_vertex[3]     * (1 - alpha) * (1 - beta) * (    gamma) + \
+                  opp_base_vertex[3]  * (    alpha) * (    beta) * (    gamma) + \
+                  opp_alpha_vertex[3] * (1 - alpha) * (    beta) * (    gamma) + \
+                  opp_beta_vertex[3]  * (    alpha) * (1 - beta) * (    gamma) + \
+                  opp_gamma_vertex[3] * (    alpha) * (    beta) * (1 - gamma)
+
+    return final_value
+    
+
 def get_voxel(volume: Volume, x: float, y: float, z: float):
     """
     Retrieves the value of a voxel for the given coordinates.
