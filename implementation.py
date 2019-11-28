@@ -78,6 +78,30 @@ def get_voxel(volume: Volume, x: float, y: float, z: float):
     return volume.data[x, y, z]
 
 
+def get_voxels(volume: Volume, xs_raw: np.ndarray, ys_raw: np.ndarray, zs_raw: np.ndarray) -> np.ndarray:
+    """
+    Return a whole array of voxel values, given arrays of coordinates xs_raw, ys_raw and zs_raw
+    """
+
+    xs = np.floor(xs_raw).astype(int)
+    ys = np.floor(ys_raw).astype(int)
+    zs = np.floor(zs_raw).astype(int)
+
+    invalid_xs = (xs < 0) | (xs >= volume.dim_x)
+    invalid_ys = (ys < 0) | (ys >= volume.dim_y)
+    invalid_zs = (zs < 0) | (zs >= volume.dim_z)
+
+    test = np.stack([invalid_xs, invalid_ys, invalid_zs]).sum(axis=0)
+
+    xs[invalid_xs] = 0
+    ys[invalid_ys] = 0
+    zs[invalid_zs] = 0
+
+    result = np.where(test, np.zeros_like(test), volume.data[xs, ys, zs])
+
+    return result
+
+
 def get_z_voxels(volume: Volume, x: float, y: float):
     """
     Retrieves the array of voxel values for the given coordinates x and y.
