@@ -25,6 +25,23 @@ def get_voxel(volume: Volume, x: float, y: float, z: float):
 
     return volume.data[x, y, z]
 
+
+def get_voxels(volume: Volume, ax, ay, az):
+    ax = np.trunc(ax).astype(int)
+    ay = np.trunc(ay).astype(int)
+    az = np.trunc(az).astype(int)
+
+    result = np.zeros(len(ax))
+
+    for i in range(len(ax)):
+        x = ax[i]
+        y = ay[i]
+        z = az[i]
+        if not (x < 0 or y < 0 or z < 0 or x >= volume.dim_x or y >= volume.dim_y or z >= volume.dim_z):
+            result[i] = volume.data[x, y, z]
+    return result
+
+
 def get_z_voxels(volume: Volume, x: float, y: float):
     """
     Retrieves the array of voxel values for the given coordinates x and y.
@@ -137,23 +154,22 @@ class RaycastRendererImplementation(RaycastRenderer):
         for i in range(0, image_size, step):
             for j in range(0, image_size, step):
                 value_max = 0
-                for k in range(-100, 100, 10):
-                    # Get the voxel coordinate X
-                    voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
-                                         volume_center[0] + k * view_vector[0]
 
-                    # Get the voxel coordinate Y
-                    voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
-                                         volume_center[1] + k * view_vector[1]
+                vec_k = np.arange(-100, 100, 10)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
 
-                    # Get the voxel coordinate Z
-                    voxel_coordinate_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + \
-                                         volume_center[2] + k * view_vector[2]
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
 
-                    # Get voxel value
-                    value = get_voxel(volume, voxel_coordinate_x, voxel_coordinate_y, voxel_coordinate_z)
-                    if (value > value_max):
-                        value_max = value
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                value_vec = get_voxels(volume, vc_vec_x, vc_vec_y, vc_vec_z)
+                value_max = np.max(value_vec)
 
                 # Normalize value to be between 0 and 1
                 red = value_max / volume_maximum
