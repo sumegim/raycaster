@@ -5,15 +5,23 @@ from volume.volume import GradientVolume, Volume
 from collections.abc import ValuesView
 import math
 
+from itertools import product
 
-def single_trilinear_interpolation(point: np.ndarray, vertices: np.ndarray):
+
+def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray, view_inverse: np.ndarray) -> float:
     """
     Retrieves the interpolated value of a 3D point from the surrounding points.
     :param point: The 3D point for which we want to calculate the linearly interpolated value, with shape (3,)
-    :param vertices: Array of all points surrounding the point of interest, with shape (8, 3)
-        8 points of a cube and 3 dimensions (x, y, z, value) for each vertex.
+    :param vertices: Array of all points surrounding the point of interest, with shape (8, 4)
+        8 points of a cube and 3 dimensions (x, y, z) plus the value for each vertex.
+    :param view_inverse: The inverse of the transformation matrix provided by the framework
     :return: Interpolated value
     """
+    # Transpose everything to the cube coordinate system
+    point = view_inverse @ point_raw
+    vertices = np.rint(np.concatenate(
+        [(view_inverse @ vertices_raw[:, :-1].T).T, vertices_raw[:, -1:]], axis=1))
+
     # Get vertex to start all calculations
     base_vertex = vertices[0]
     other_vertices = vertices[1:]
@@ -24,9 +32,9 @@ def single_trilinear_interpolation(point: np.ndarray, vertices: np.ndarray):
     same_z = other_vertices[:, 2] == base_vertex[2]
 
     # Vertices for alpha, beta & gamma computation
-    alpha_vertex = other_vertices[~same_x &  same_y &  same_z].flatten()
-    beta_vertex =  other_vertices[ same_x & ~same_y &  same_z].flatten()
-    gamma_vertex = other_vertices[ same_x &  same_y & ~same_z].flatten()
+    alpha_vertex = other_vertices[~same_x & same_y & same_z].flatten()
+    beta_vertex = other_vertices[same_x & ~same_y & same_z].flatten()
+    gamma_vertex = other_vertices[same_x & same_y & ~same_z].flatten()
 
     # Alpha, beta & gamma
     alpha = (point[0] - base_vertex[0]) / (alpha_vertex[0] - base_vertex[0])
@@ -34,22 +42,22 @@ def single_trilinear_interpolation(point: np.ndarray, vertices: np.ndarray):
     gamma = (point[2] - base_vertex[2]) / (gamma_vertex[2] - base_vertex[2])
 
     # Other vertices needed, opposite to vertices identified before
-    opp_alpha_vertex = other_vertices[ same_x & ~same_y & ~same_z].flatten()
-    opp_beta_vertex =  other_vertices[~same_x &  same_y & ~same_z].flatten()
-    opp_gamma_vertex = other_vertices[~same_x & ~same_y &  same_z].flatten()
-    opp_base_vertex =  other_vertices[~same_x & ~same_y & ~same_z].flatten()
+    opp_alpha_vertex = other_vertices[same_x & ~same_y & ~same_z].flatten()
+    opp_beta_vertex = other_vertices[~same_x & same_y & ~same_z].flatten()
+    opp_gamma_vertex = other_vertices[~same_x & ~same_y & same_z].flatten()
+    opp_base_vertex = other_vertices[~same_x & ~same_y & ~same_z].flatten()
 
-    final_value = base_vertex[3]      * (1 - alpha) * (1 - beta) * (1 - gamma) + \
-                  alpha_vertex[3]     * (    alpha) * (1 - beta) * (1 - gamma) + \
-                  beta_vertex[3]      * (1 - alpha) * (    beta) * (1 - gamma) + \
-                  gamma_vertex[3]     * (1 - alpha) * (1 - beta) * (    gamma) + \
-                  opp_base_vertex[3]  * (    alpha) * (    beta) * (    gamma) + \
-                  opp_alpha_vertex[3] * (1 - alpha) * (    beta) * (    gamma) + \
-                  opp_beta_vertex[3]  * (    alpha) * (1 - beta) * (    gamma) + \
-                  opp_gamma_vertex[3] * (    alpha) * (    beta) * (1 - gamma)
+    final_value = base_vertex[3] * (1 - alpha) * (1 - beta) * (1 - gamma) + \
+        alpha_vertex[3] * (alpha) * (1 - beta) * (1 - gamma) + \
+        beta_vertex[3] * (1 - alpha) * (beta) * (1 - gamma) + \
+        gamma_vertex[3] * (1 - alpha) * (1 - beta) * (gamma) + \
+        opp_base_vertex[3] * (alpha) * (beta) * (gamma) + \
+        opp_alpha_vertex[3] * (1 - alpha) * (beta) * (gamma) + \
+        opp_beta_vertex[3] * (alpha) * (1 - beta) * (gamma) + \
+        opp_gamma_vertex[3] * (alpha) * (beta) * (1 - gamma)
 
     return final_value
-    
+
 
 def get_voxel(volume: Volume, x: float, y: float, z: float):
     """
@@ -68,6 +76,7 @@ def get_voxel(volume: Volume, x: float, y: float, z: float):
     z = int(math.floor(z))
 
     return volume.data[x, y, z]
+
 
 def get_z_voxels(volume: Volume, x: float, y: float):
     """
@@ -124,18 +133,19 @@ class RaycastRendererImplementation(RaycastRenderer):
             for j in range(0, image_size, step):
                 # Get the voxel coordinate X
                 voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
-                                     volume_center[0]
+                    volume_center[0]
 
                 # Get the voxel coordinate Y
                 voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
-                                     volume_center[1]
+                    volume_center[1]
 
                 # Get the voxel coordinate Z
                 voxel_coordinate_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + \
-                                     volume_center[2]
+                    volume_center[2]
 
                 # Get voxel value
-                value = get_voxel(volume, voxel_coordinate_x, voxel_coordinate_y, voxel_coordinate_z)
+                value = get_voxel(volume, voxel_coordinate_x,
+                                  voxel_coordinate_y, voxel_coordinate_z)
 
                 # Normalize value to be between 0 and 1
                 red = value / volume_maximum
@@ -169,6 +179,11 @@ class RaycastRendererImplementation(RaycastRenderer):
         # View vector. See documentation in parent's class
         view_vector = view_matrix[8:11]
 
+        # Define the view matrix
+        view_matrix = np.concatenate(
+            [u_vector.reshape(-1, 1), v_vector.reshape(-1, 1), view_vector.reshape(-1, 1)], axis=1)
+        inverse_view_matrix = np.linalg.inv(view_matrix)
+
         # Center of the image. Image is squared
         image_center = image_size / 2
 
@@ -181,17 +196,46 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         for i in range(0, image_size, step):
             for j in range(0, image_size, step):
-                # Get the voxel coordinate X
-                voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
-                                     volume_center[0]
+                max_interpolated_value = -math.inf
+                for k in range(-100, 100, 10):
+                    # Get the voxel coordinate X
+                    voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
+                        view_vector[0] * k
 
-                # Get the voxel coordinate Y
-                voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
-                                     volume_center[1]
+                    # Get the voxel coordinate Y
+                    voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
+                        view_vector[1] * k
 
-                # Let's try getting the vector of Zs out of Volume.data with coordinates x and y
-                voxel_array = get_z_voxels(volume, voxel_coordinate_x, voxel_coordinate_y);
-                value = np.max(voxel_array)
+                    # Get the voxel coordinate Z
+                    voxel_coordinate_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + \
+                        view_vector[2] * k
+
+                    x_lower = math.floor(voxel_coordinate_x)
+                    y_lower = math.floor(voxel_coordinate_y)
+                    z_lower = math.floor(voxel_coordinate_z)
+                    x_upper = math.ceil(voxel_coordinate_x)
+                    y_upper = math.ceil(voxel_coordinate_y)
+                    z_upper = math.ceil(voxel_coordinate_z)
+
+                    xs = (x_lower, x_upper) if x_lower != x_upper else \
+                        (x_lower, x_lower + 1)
+                    ys = (y_lower, y_upper) if y_lower != y_upper else \
+                        (y_lower, y_lower + 1)
+                    zs = (z_lower, z_upper) if z_lower != z_upper else \
+                        (z_lower, z_lower + 1)
+
+                    points_coords = product(xs, ys, zs)
+                    points = np.array([[point[0], point[1], point[2], get_voxel(volume, point[0], point[1], point[2])]
+                                       for point in points_coords])
+
+                    interpolated_value = single_trilinear_interpolation(np.array([voxel_coordinate_x,
+                                                                                  voxel_coordinate_y,
+                                                                                  voxel_coordinate_z]),
+                                                                        points,
+                                                                        inverse_view_matrix)
+                    max_interpolated_value = interpolated_value if interpolated_value > max_interpolated_value else max_interpolated_value
+
+                value = max_interpolated_value
 
                 # Normalize value to be between 0 and 1
                 red = value / volume_maximum
