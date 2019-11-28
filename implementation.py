@@ -189,79 +189,37 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
-    # TODO: Implement MIP function
-    def render_mip(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
-        # Clear the image
-        self.clear_image()
+    def vector_render_mip(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        # Define basis matrix of viewplane coord vectors in volume coord system
+        basis_matrix = np.stack(
+            [view_matrix[0:3], view_matrix[4:7], view_matrix[8:11]]).T
 
-        # U vector. See documentation in parent's class
-        u_vector = view_matrix[0:3]
+        image_center = image_size // 2
 
-        # V vector. See documentation in parent's class
-        v_vector = view_matrix[4:7]
-
-        # View vector. See documentation in parent's class
-        view_vector = view_matrix[8:11]
-
-        # Define the view matrix
-        view_matrix = np.concatenate(
-            [u_vector.reshape(-1, 1), v_vector.reshape(-1, 1), view_vector.reshape(-1, 1)], axis=1)
-        inverse_view_matrix = np.linalg.inv(view_matrix)
-
-        # Center of the image. Image is squared
-        image_center = image_size / 2
-
-        # Center of the volume (3-dimensional)
-        volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
+        volume_center = np.array(
+            [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2])
         volume_maximum = volume.get_maximum()
 
-        # Define a step size to make the loop faster
-        step = 2 if self.interactive_mode else 1
+        sample_start = -volume_maximum / 2
+        sample_end = volume_maximum / 2
+        sample_step = 10
+        n_samples = math.ceil((sample_end - sample_start) / sample_step)
+        view_samples = np.arange(sample_start, sample_end, sample_step)
 
+        step = 2 if self.interactive_mode else 1
         for i in range(0, image_size, step):
             for j in range(0, image_size, step):
-                max_interpolated_value = -math.inf
-                for k in range(-100, 100, 10):
-                    # Get the voxel coordinate X
-                    voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
-                        view_vector[0] * k
+                raw_points = np.stack(
+                    [np.full(n_samples, i - image_center),
+                     np.full(n_samples, j - image_center),
+                     view_samples])
 
-                    # Get the voxel coordinate Y
-                    voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
-                        view_vector[1] * k
+                points = (basis_matrix @ raw_points) + \
+                    volume_center.reshape(-1, 1)
 
-                    # Get the voxel coordinate Z
-                    voxel_coordinate_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + \
-                        view_vector[2] * k
+                voxels = get_voxels(volume, points[0], points[1], points[2])
 
-                    x_lower = math.floor(voxel_coordinate_x)
-                    y_lower = math.floor(voxel_coordinate_y)
-                    z_lower = math.floor(voxel_coordinate_z)
-                    x_upper = math.ceil(voxel_coordinate_x)
-                    y_upper = math.ceil(voxel_coordinate_y)
-                    z_upper = math.ceil(voxel_coordinate_z)
-
-                    xs = (x_lower, x_upper) if x_lower != x_upper else \
-                        (x_lower, x_lower + 1)
-                    ys = (y_lower, y_upper) if y_lower != y_upper else \
-                        (y_lower, y_lower + 1)
-                    zs = (z_lower, z_upper) if z_lower != z_upper else \
-                        (z_lower, z_lower + 1)
-
-                    points_coords = product(xs, ys, zs)
-                    points = np.array([[point[0], point[1], point[2], get_voxel(volume, point[0], point[1], point[2])]
-                                       for point in points_coords])
-
-                    interpolated_value = single_trilinear_interpolation(np.array([voxel_coordinate_x,
-                                                                                  voxel_coordinate_y,
-                                                                                  voxel_coordinate_z]),
-                                                                        points,
-                                                                        inverse_view_matrix)
-                    max_interpolated_value = interpolated_value if interpolated_value > max_interpolated_value else max_interpolated_value
-
-                value = max_interpolated_value
-
-                # Normalize value to be between 0 and 1
+                value = voxels.max()
                 red = value / volume_maximum
                 green = red
                 blue = red
@@ -279,7 +237,15 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
+    # TODO: Implement MIP function
+
+    def render_mip(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        # Clear the image
+        self.clear_image()
+        self.vector_render_mip(view_matrix, volume, image_size, image)
+
     # TODO: Implement Compositing function. TFColor is already imported. self.tfunc is the current transfer function.
+
     def render_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         pass
 
