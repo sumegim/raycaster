@@ -77,6 +77,18 @@ def get_voxel(volume: Volume, x: float, y: float, z: float):
 
     return volume.data[x, y, z]
 
+def interpolate(volume: Volume, points_raw: np.ndarray, view_inverse: np.ndarray) -> float:
+    """ 
+    :param points_raw: shape == (n_points, 3)
+    """
+    # Should get vertices for each point
+    point = points_raw[0]
+    coords = np.stack(np.floor(point), np.ceil(point)).T
+    vertices_of_point = np.array(list(product(coords[0], coords[1], coords[2])))
+    values = get_voxels(volume, vertices_of_point.T[0], vertices_of_point.T[1], vertices_of_point.T[2])
+    # ??
+
+    pass
 
 def get_voxels(volume: Volume, xs_raw: np.ndarray, ys_raw: np.ndarray, zs_raw: np.ndarray) -> np.ndarray:
     """
