@@ -215,21 +215,25 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         for i in range(0, image_size, step):
             for j in range(0, image_size, step):
+
+                vec_k = np.arange(100, -100, -10)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
                 c_prev = TFColor(0, 0, 0, 0)
-                for k in range(100, -100, -10):
+                for k in range(len(vec_k)):
                     # Get the voxel coordinate X
-                    voxel_coordinate_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + \
-                                         volume_center[0] + k * view_vector[0]
 
-                    # Get the voxel coordinate Y
-                    voxel_coordinate_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + \
-                                         volume_center[1] + k * view_vector[1]
-
-                    # Get the voxel coordinate Z
-                    voxel_coordinate_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + \
-                                         volume_center[2] + k * view_vector[2]
-
-                    c_i = self.tfunc.get_color(get_voxel(volume, voxel_coordinate_x, voxel_coordinate_y, voxel_coordinate_z))
+                    c_i = self.tfunc.get_color(get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
                     # Get voxel value
 
                     # # Normalize value to be between 0 and 1
