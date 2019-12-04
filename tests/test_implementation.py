@@ -1,6 +1,7 @@
+from volume.volume import Volume
 import numpy as np
 
-from implementation import single_trilinear_interpolation
+from implementation import single_trilinear_interpolation, interpolate
 
 
 def test_simple_interpolation():
@@ -52,3 +53,25 @@ def test_rotated_coords():
 
     assert single_trilinear_interpolation(
         point, vertices, inverse_view_matrix) == single_trilinear_interpolation(rotated_point, rotated_vertices, inverse_rotated_matrix), "interpolation should be rotation-invariant"
+
+def test_interpolate():
+    data = np.fromfile('tests/default_volume', dtype=np.int).reshape((256, 256, 163))
+    volume = Volume(data)
+    view_matrix = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    inverse_view_matrix = np.linalg.inv(view_matrix)
+    points_raw = np.fromfile('tests/default_points', dtype=np.float).reshape(4,3)
+
+    interpolated_values = interpolate(volume, points_raw, inverse_view_matrix)
+
+    # assert (np.abs(interpolated_values - np.array([ 47.44855585,  71.62875015, 133.71909277,  59.86651823]))).all(), \
+    #                         "works with just raw points in input"
+    assert np.isclose(interpolated_values, np.array([ 47.44855585,  71.62875015, 133.71909277,  59.86651823])).all(), \
+                            "works with just raw points in input"
+
+    inverse_view_matrix = [[0.1, -0.5, -0.8], [-0.3, 0.8, -0.5], [0.9, 0.3, 0]]
+    interpolated_values = interpolate(volume, points_raw, inverse_view_matrix)
+
+    # assert (np.abs(interpolated_values - np.array([ 47.44855585,  71.62875015, 133.71909277,  59.86651823]))).all(), \
+    #                         "works with just raw points in input"
+    assert np.isclose(interpolated_values, np.array([ 47.44855585,  71.62875015, 133.71909277,  59.86651823])).all(), \
+                            "should work with wierd view_matrix"
