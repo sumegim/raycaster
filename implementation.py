@@ -4,6 +4,7 @@ from genevis.transfer_function import TFColor
 from volume.volume import GradientVolume, Volume
 from collections.abc import ValuesView
 import math
+from tqdm import tqdm
 
 from itertools import product
 
@@ -12,51 +13,66 @@ def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarr
     """
     Retrieves the interpolated value of a 3D point from the surrounding points.
     :param point: The 3D point for which we want to calculate the linearly interpolated value, with shape (3,)
-    :param vertices: Array of all points surrounding the point of interest, with shape (8, 4)
+    :param vertices_raw: Array of all points surrounding the point of interest, with shape (8, 4)
         8 points of a cube and 3 dimensions (x, y, z) plus the value for each vertex.
     :param view_inverse: The inverse of the transformation matrix provided by the framework
     :return: Interpolated value
     """
     # Transpose everything to the cube coordinate system
-    point = view_inverse @ point_raw
-    vertices = np.rint(np.concatenate(
-        [(view_inverse @ vertices_raw[:, :-1].T).T, vertices_raw[:, -1:]], axis=1))
+    # view_inverse = np.around(view_inverse, 1)
+    # point = view_inverse @ point_raw
 
-    # Get vertex to start all calculations
-    base_vertex = vertices[0]
-    other_vertices = vertices[1:]
+    # # Should get vertices for each point
+    # coords = np.stack([np.floor(point), np.ceil(point)]).T
+    # vertices_of_point = np.array(list(product(coords[0], coords[1], coords[2])))
+    # values = get_voxels(volume, vertices_of_point.T[0], vertices_of_point.T[1], vertices_of_point.T[2])
+    # vertices = np.concatenate([vertices_of_point, values.reshape((-1, 1))], axis=1)
 
-    # Boolean arrays that indicates vertices on same axis
-    same_x = other_vertices[:, 0] == base_vertex[0]
-    same_y = other_vertices[:, 1] == base_vertex[1]
-    same_z = other_vertices[:, 2] == base_vertex[2]
+    point = point_raw
+    vertices = vertices_raw
 
-    # Vertices for alpha, beta & gamma computation
-    alpha_vertex = other_vertices[~same_x & same_y & same_z].flatten()
-    beta_vertex = other_vertices[same_x & ~same_y & same_z].flatten()
-    gamma_vertex = other_vertices[same_x & same_y & ~same_z].flatten()
+    # If point is already on int coords, it's vertices will be the same as the point
+    if np.isclose(vertices,vertices[0]).all():
+        # Just return the value of any vertex, they are all the same
+        return vertices[0][3]
+    else: 
+    # Do the interpolation
 
-    # Alpha, beta & gamma
-    alpha = (point[0] - base_vertex[0]) / (alpha_vertex[0] - base_vertex[0])
-    beta = (point[1] - base_vertex[1]) / (beta_vertex[1] - base_vertex[1])
-    gamma = (point[2] - base_vertex[2]) / (gamma_vertex[2] - base_vertex[2])
+        # Get vertex to start all calculations
+        base_vertex = vertices[0]
+        other_vertices = vertices[1:]
 
-    # Other vertices needed, opposite to vertices identified before
-    opp_alpha_vertex = other_vertices[same_x & ~same_y & ~same_z].flatten()
-    opp_beta_vertex = other_vertices[~same_x & same_y & ~same_z].flatten()
-    opp_gamma_vertex = other_vertices[~same_x & ~same_y & same_z].flatten()
-    opp_base_vertex = other_vertices[~same_x & ~same_y & ~same_z].flatten()
+        # Boolean arrays that indicates vertices on same axis
+        same_x = other_vertices[:, 0] == base_vertex[0]
+        same_y = other_vertices[:, 1] == base_vertex[1]
+        same_z = other_vertices[:, 2] == base_vertex[2]
 
-    final_value = base_vertex[3] * (1 - alpha) * (1 - beta) * (1 - gamma) + \
-        alpha_vertex[3] * (alpha) * (1 - beta) * (1 - gamma) + \
-        beta_vertex[3] * (1 - alpha) * (beta) * (1 - gamma) + \
-        gamma_vertex[3] * (1 - alpha) * (1 - beta) * (gamma) + \
-        opp_base_vertex[3] * (alpha) * (beta) * (gamma) + \
-        opp_alpha_vertex[3] * (1 - alpha) * (beta) * (gamma) + \
-        opp_beta_vertex[3] * (alpha) * (1 - beta) * (gamma) + \
-        opp_gamma_vertex[3] * (alpha) * (beta) * (1 - gamma)
+        # Vertices for alpha, beta & gamma computation
+        alpha_vertex = other_vertices[~same_x & same_y & same_z].flatten()
+        beta_vertex = other_vertices[same_x & ~same_y & same_z].flatten()
+        gamma_vertex = other_vertices[same_x & same_y & ~same_z].flatten()
 
-    return final_value
+        # Alpha, beta & gamma
+        alpha = (point[0] - base_vertex[0]) / (alpha_vertex[0] - base_vertex[0])
+        beta = (point[1] - base_vertex[1]) / (beta_vertex[1] - base_vertex[1])
+        gamma = (point[2] - base_vertex[2]) / (gamma_vertex[2] - base_vertex[2])
+
+        # Other vertices needed, opposite to vertices identified before
+        opp_alpha_vertex = other_vertices[same_x & ~same_y & ~same_z].flatten()
+        opp_beta_vertex = other_vertices[~same_x & same_y & ~same_z].flatten()
+        opp_gamma_vertex = other_vertices[~same_x & ~same_y & same_z].flatten()
+        opp_base_vertex = other_vertices[~same_x & ~same_y & ~same_z].flatten()
+
+        final_value = base_vertex[3] * (1 - alpha) * (1 - beta) * (1 - gamma) + \
+            alpha_vertex[3] * (alpha) * (1 - beta) * (1 - gamma) + \
+            beta_vertex[3] * (1 - alpha) * (beta) * (1 - gamma) + \
+            gamma_vertex[3] * (1 - alpha) * (1 - beta) * (gamma) + \
+            opp_base_vertex[3] * (alpha) * (beta) * (gamma) + \
+            opp_alpha_vertex[3] * (1 - alpha) * (beta) * (gamma) + \
+            opp_beta_vertex[3] * (alpha) * (1 - beta) * (gamma) + \
+            opp_gamma_vertex[3] * (alpha) * (beta) * (1 - gamma)
+
+        return final_value
 
 
 def get_voxel(volume: Volume, x: float, y: float, z: float):
@@ -76,6 +92,38 @@ def get_voxel(volume: Volume, x: float, y: float, z: float):
     z = int(math.floor(z))
 
     return volume.data[x, y, z]
+
+def interpolate(volume: Volume, points_raw: np.ndarray, view_inverse: np.ndarray):
+    """ 
+    :param points_raw: shape == (n_points, 3)
+    """
+    # Should get vertices for each point
+    # point = points_raw[0]
+    # coords = np.stack([np.floor(point), np.ceil(point)]).T
+    # vertices_of_point = np.array(list(product(coords[0], coords[1], coords[2])))
+    # values = get_voxels(volume, vertices_of_point.T[0], vertices_of_point.T[1], vertices_of_point.T[2])
+    # vertices = np.concatenate([vertices_of_point, values.reshape((-1, 1))], axis=1)
+    # return vertices
+
+    # Vectorized vertices
+    # Could be a bit slow for list comprehension, might change
+    points = (view_inverse @ points_raw.T).T
+
+    coords_raw = np.stack([np.floor(points), np.ceil(points)], axis=1)
+    condition = np.diff(coords_raw, axis=1).astype(bool)
+    broad_condition = np.broadcast_to(condition, coords_raw.shape)
+    coords = np.where(broad_condition, coords_raw, np.array([[coords_raw[~broad_condition][0]], [coords_raw[~broad_condition][1] + 1]]))
+    
+    vertices_of_point = np.array([list(product(coords[i][:,0], coords[i][:,1], coords[i][:,2])) 
+                                  for i in range(coords.shape[0])])
+    values = np.array([get_voxels(volume, vertices_of_point[i].T[0], vertices_of_point[i].T[1], vertices_of_point[i].T[2])
+                       for i in range(vertices_of_point.shape[0])])
+    vertices_raw = [np.concatenate([vertices_of_point[i], values[i].reshape(-1,1)], axis=1) 
+                    for i in range(vertices_of_point.shape[0])]
+    
+    final_values = np.array([single_trilinear_interpolation(points[i], vertices_raw[i], view_inverse) 
+                             for i in range(points.shape[0])])
+    return final_values
 
 
 def get_voxels(volume: Volume, xs_raw: np.ndarray, ys_raw: np.ndarray, zs_raw: np.ndarray) -> np.ndarray:
@@ -193,6 +241,7 @@ class RaycastRendererImplementation(RaycastRenderer):
         # Define basis matrix of viewplane coord vectors in volume coord system
         basis_matrix = np.stack(
             [view_matrix[0:3], view_matrix[4:7], view_matrix[8:11]]).T
+        view_inverse = np.linalg.inv(basis_matrix)
 
         image_center = image_size // 2
 
@@ -200,14 +249,15 @@ class RaycastRendererImplementation(RaycastRenderer):
             [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2])
         volume_maximum = volume.get_maximum()
 
-        sample_start = -volume_maximum / 2
-        sample_end = volume_maximum / 2
-        sample_step = 10
+        max_range = max(volume.dim_x, volume.dim_y, volume.dim_y)
+        sample_start = -max_range / 2
+        sample_end = max_range / 2
+        sample_step = 1
         n_samples = math.ceil((sample_end - sample_start) / sample_step)
         view_samples = np.arange(sample_start, sample_end, sample_step)
 
         step = 2 if self.interactive_mode else 1
-        for i in range(0, image_size, step):
+        for i in tqdm(range(0, image_size, step)):
             for j in range(0, image_size, step):
                 raw_points = np.stack(
                     [np.full(n_samples, i - image_center),
@@ -217,6 +267,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                 points = (basis_matrix @ raw_points) + \
                     volume_center.reshape(-1, 1)
 
+                # voxels = interpolate(volume, points.T, view_inverse)
                 voxels = get_voxels(volume, points[0], points[1], points[2])
 
                 value = voxels.max()
@@ -315,8 +366,7 @@ class RaycastRendererImplementation(RaycastRenderer):
     def render_mouse_brain(self, view_matrix: np.ndarray, annotation_volume: Volume, energy_volumes: dict,
                            image_size: int, image: np.ndarray):
         # TODO: Implement your code considering these volumes (annotation_volume, and energy_volumes)
-        pass
-
+        self.render_mip(view_matrix, annotation_volume, image_size, image)
 
 class GradientVolumeImpl(GradientVolume):
     # TODO: Implement gradient compute function. See parent class to check available attributes.
