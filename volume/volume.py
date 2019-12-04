@@ -1,6 +1,6 @@
 import numpy as np
 import math
-
+from typing import List
 
 class Volume:
     """
@@ -56,7 +56,7 @@ ZERO_GRADIENT = VoxelGradient()
 class GradientVolume:
     def __init__(self, volume):
         self.volume = volume
-        self.data = []
+        self.data : List[VoxelGradient] = []
         self.compute()
         self.max_magnitude = -1.0
 
