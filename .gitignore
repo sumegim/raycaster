@@ -2,7 +2,8 @@
 genevis/
 gui/
 util/
-volume/
+volume/__init__.py
+volume/volumeIO.py
 main.py
 mapping.pkl
 *.pdf
@@ -108,6 +109,10 @@ celerybeat-schedule
 
 # mkdocs documentation
 /site
+
+#pycharm
+.idea
+venv
 
 # mypy
 .mypy_cache/

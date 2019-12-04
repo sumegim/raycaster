@@ -202,7 +202,7 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         sample_start = -volume_maximum / 2
         sample_end = volume_maximum / 2
-        sample_step = 10
+        sample_step = 2
         n_samples = math.ceil((sample_end - sample_start) / sample_step)
         view_samples = np.arange(sample_start, sample_end, sample_step)
 
@@ -272,7 +272,7 @@ class RaycastRendererImplementation(RaycastRenderer):
         for i in range(0, image_size, step):
             for j in range(0, image_size, step):
 
-                vec_k = np.arange(100, -100, -10)
+                vec_k = np.arange(100, -100, -2)
                 x_k = vec_k * view_vector[0]
                 y_k = vec_k * view_vector[1]
                 z_k = vec_k * view_vector[2]
@@ -311,11 +311,147 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 3] = alpha
 
 
+    def render_flat_surface(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        # Clear the image
+        self.clear_image()
+
+        # U vector. See documentation in parent's class
+        u_vector = view_matrix[0:3]
+
+        # V vector. See documentation in parent's class
+        v_vector = view_matrix[4:7]
+
+        # View vector. See documentation in parent's class
+        view_vector = view_matrix[8:11]
+
+        # Center of the image. Image is squared
+        image_center = image_size / 2
+
+        # Center of the volume (3-dimensional)
+        volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
+        volume_maximum = volume.get_maximum()
+
+        L = np.array([-1, 1, -1]).reshape(-1, 1)
+        L = L / np.linalg.norm(L)
+        basis_matrix = np.stack([view_matrix[0:3], view_matrix[4:7], view_matrix[8:11]]).T
+        volume_center = np.array([volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2])
+        L = (basis_matrix @ L) + volume_center.reshape(-1, 1)
+
+        L = np.array(view_vector)
+
+        # Define a step size to make the loop faster
+        step = 2 if self.interactive_mode else 1
+
+        for i in range(0, image_size, step):
+            for j in range(0, image_size, step):
+
+                vec_k = np.arange(-100, 100, 1)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                vx = 0
+                N = np.zeros(3)
+                for k in range(len(vec_k)):
+                    # Get the voxel coordinate X
+                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    if vx > 1:
+                        delta_f = self.annotation_gradient_volume.get_gradient(vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        magnitude_f = delta_f.magnitude
+                        N[0] = delta_f.x / magnitude_f
+                        N[1] = delta_f.y / magnitude_f
+                        N[2] = delta_f.z / magnitude_f
+                        break
+
+                # Normalize value to be between 0 and 1
+                red = (vx + (vx * np.dot(N.reshape(1, 3), L))) / (2 * volume_maximum)
+                green = red
+                blue = red
+                alpha = 1 if red > 0 else 0.0
+
+                # Compute the color value (0...255)
+                red = math.floor(red * 255) if red < 255 else 255
+                green = math.floor(green * 255) if green < 255 else 255
+                blue = math.floor(blue * 255) if blue < 255 else 255
+                alpha = math.floor(alpha * 255) if alpha < 255 else 255
+
+                # Assign color to the pixel i, j
+                image[(j * image_size + i) * 4] = red
+                image[(j * image_size + i) * 4 + 1] = green
+                image[(j * image_size + i) * 4 + 2] = blue
+                image[(j * image_size + i) * 4 + 3] = alpha
+
+    def render_energy(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        # U vector. See documentation in parent's class
+        u_vector = view_matrix[0:3]
+
+        # V vector. See documentation in parent's class
+        v_vector = view_matrix[4:7]
+
+        # View vector. See documentation in parent's class
+        view_vector = view_matrix[8:11]
+
+        # Center of the image. Image is squared
+        image_center = image_size / 2
+
+        # Center of the volume (3-dimensional)
+        volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
+        volume_maximum = volume.get_maximum()
+
+        L = np.array(view_vector)
+
+        # Define a step size to make the loop faster
+        step = 2 if self.interactive_mode else 1
+
+        for i in range(0, image_size, step):
+            for j in range(0, image_size, step):
+
+                vec_k = np.arange(-100, 100, 2)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                vx = 0
+                for k in range(len(vec_k)):
+                    # Get the voxel coordinate X
+                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    if vx > 1:
+                        break
+
+                # Normalize value to be between 0 and 1
+                red = vx / volume_maximum
+
+                # Compute the color value (0...255)
+                red = math.floor(red * 255) if red < 255 else 255
+
+                # Assign color to the pixel i, j
+                image[(j * image_size + i) * 4] -= red
+
+
     # TODO: Implement function to render multiple energy volumes and annotation volume as a silhouette.
     def render_mouse_brain(self, view_matrix: np.ndarray, annotation_volume: Volume, energy_volumes: dict,
                            image_size: int, image: np.ndarray):
+
         # TODO: Implement your code considering these volumes (annotation_volume, and energy_volumes)
-        pass
+        self.render_flat_surface(view_matrix, annotation_volume, image_size, image)
+        for key in energy_volumes:
+            self.render_energy(view_matrix, energy_volumes[key], image_size, image)
 
 
 class GradientVolumeImpl(GradientVolume):
