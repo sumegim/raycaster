@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from genevis.render import RaycastRenderer
 from genevis.transfer_function import TFColor
 from volume.volume import GradientVolume, Volume
@@ -8,6 +9,14 @@ from tqdm import tqdm
 
 from itertools import product
 
+# Get the colour specified in structures.csv for each annotation
+structures = pd.read_csv('../meta/structures.csv')
+structures.index = structures.database_id
+colour_table = pd.concat([structures.color.str.slice(0,2), structures.color.str.slice(2,4), structures.color.str.slice(4,6)], axis=1)
+colour_table.columns = ["r", "g", "b"]
+colour_table = colour_table.apply(lambda col: col.apply(int, base=16), axis=0)
+colour_table = colour_table / 255                                                    # Normalize the data
+colour_table = colour_table.append(pd.Series([0,0,0], name=0, index=['r','g','b']))  # Add black
 
 def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray, view_inverse: np.ndarray) -> float:
     """
@@ -21,7 +30,6 @@ def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarr
     # Transpose everything to the cube coordinate system
     # view_inverse = np.around(view_inverse, 1)
     # point = view_inverse @ point_raw
-
     # # Should get vertices for each point
     # coords = np.stack([np.floor(point), np.ceil(point)]).T
     # vertices_of_point = np.array(list(product(coords[0], coords[1], coords[2])))
@@ -288,14 +296,10 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
-    # TODO: Implement MIP function
-
     def render_mip(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         # Clear the image
         self.clear_image()
         self.vector_render_mip(view_matrix, volume, image_size, image)
-
-    # TODO: Implement Compositing function. TFColor is already imported. self.tfunc is the current transfer function.
 
     def render_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         # Clear the image
@@ -361,6 +365,92 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
+    def render_annotation_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        # Clear the image
+        self.clear_image()
+
+        basis_matrix = np.stack(
+            [view_matrix[0:3], view_matrix[4:7], view_matrix[8:11]]).T
+        view_inverse = np.linalg.inv(basis_matrix)
+
+        image_center = image_size // 2
+
+        volume_center = np.array(
+            [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2])
+        volume_maximum = volume.get_maximum()
+
+        max_range = max(volume.dim_x, volume.dim_y, volume.dim_y)
+        sample_start = -100 / 2
+        sample_end = 100 / 2
+        sample_step = 1
+        n_samples = math.ceil((sample_end - sample_start) / sample_step)
+        view_samples = np.arange(sample_start, sample_end, sample_step)
+
+        step = 2 if self.interactive_mode else 1
+        only_zeros = True
+        for i in tqdm(range(0, image_size, step)):
+            for j in range(0, image_size, step):
+                raw_points = np.stack(
+                    [np.full(n_samples, i - image_center),
+                     np.full(n_samples, j - image_center),
+                     view_samples])
+
+                points = (basis_matrix @ raw_points) + \
+                    volume_center.reshape(-1, 1)
+
+                # voxels = interpolate(volume, points.T, view_inverse)
+                voxels = get_voxels(volume, points[0], points[1], points[2])
+
+                if voxels.max() > 0:
+                    only_zeros = False
+
+                # Get colours for voxels
+                voxel_colours = colour_table.loc[voxels.flatten()]
+                # Add opacities based on order of ray
+                voxel_colours['a'] = np.linspace(0.1, 1, voxel_colours.shape[0], endpoint=True)
+                voxel_colours['t'] = 1 - voxel_colours['a']
+
+                # Exclude black points from computation
+                non_zero = voxel_colours[['r','g','b']].sum(axis=1) > 0
+                if non_zero.any():
+                    values = voxel_colours[non_zero].mean()
+                else:
+                    values = pd.Series([0,0,0,0,0], index=['r','g','b','a','t'])
+
+                # Flip dataframe to perform back-to-front
+                # voxel_colours_reversed = voxel_colours.iloc[::-1]
+                # values = voxel_colours_reversed[['r', 'g', 'b']].mul(
+                #     voxel_colours_reversed['a'], axis=0
+                # ).cumsum().mul(
+                #     voxel_colours_reversed['t'].cumprod(), axis=0
+                # ).iloc[-1]
+                # Compute the color value (0...255)
+                red = math.floor(values.r * 255) if values.r < 1 else 255
+                green = math.floor(values.g * 255) if values.g < 1 else 255
+                blue = math.floor(values.b * 255) if values.b < 1 else 255
+                alpha = math.floor(values.a * 255) if values.a < 1 else 255
+
+                # r = 0
+                # g = 0
+                # b = 0
+                # for i, row in voxel_colours_reversed.iterrows():
+                #     r = row.r * row.a + row.t * r
+                #     g = row.g * row.a + row.t * g
+                #     b = row.b * row.a + row.t * b
+                # # Compute the color value (0...255)
+                # red = math.floor(r * 255) if r < 255 else 255
+                # green = math.floor(g * 255) if g < 255 else 255
+                # blue = math.floor(b * 255) if b < 255 else 255
+                # alpha = 255
+
+                # Assign color to the pixel i, j
+                image[(j * image_size + i) * 4] = red
+                image[(j * image_size + i) * 4 + 1] = green
+                image[(j * image_size + i) * 4 + 2] = blue
+                image[(j * image_size + i) * 4 + 3] = alpha
+
+        if only_zeros:
+            print("There were only zeros..")
 
     def render_flat_surface(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         # Clear the image
@@ -385,6 +475,7 @@ class RaycastRendererImplementation(RaycastRenderer):
         L = np.array([-1, 1, -1]).reshape(-1, 1)
         L = L / np.linalg.norm(L)
         basis_matrix = np.stack([view_matrix[0:3], view_matrix[4:7], view_matrix[8:11]]).T
+        view_inverse = np.linalg.inv(basis_matrix)
         volume_center = np.array([volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2])
         L = (basis_matrix @ L) + volume_center.reshape(-1, 1)
 
@@ -413,7 +504,8 @@ class RaycastRendererImplementation(RaycastRenderer):
                 N = np.zeros(3)
                 for k in range(len(vec_k)):
                     # Get the voxel coordinate X
-                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    # vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    # vx = interpolate(volume, )
                     if vx > 1:
                         delta_f = self.annotation_gradient_volume.get_gradient(vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                         magnitude_f = delta_f.magnitude
@@ -423,7 +515,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                         break
 
                 # Normalize value to be between 0 and 1
-                red = (vx + (vx * np.dot(N.reshape(1, 3), L))) / (2 * volume_maximum)
+                red = (10 * vx + (vx * np.dot(N.reshape(1, 3), L))) / (2 * volume_maximum)
                 green = red
                 blue = red
                 alpha = 1 if red > 0 else 0.0
@@ -493,7 +585,6 @@ class RaycastRendererImplementation(RaycastRenderer):
 
                 # Assign color to the pixel i, j
                 image[(j * image_size + i) * 4] -= red
-
 
     def has_value(self, arr):
         for i in range(len(arr)):
@@ -594,17 +685,21 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         pass
 
-    # TODO: Implement function to render multiple energy volumes and annotation volume as a silhouette.
     def render_mouse_brain(self, view_matrix: np.ndarray, annotation_volume: Volume, energy_volumes: dict,
-                           image_size: int, image: np.ndarray):
+                           image_size: int, image: np.ndarray, quick: bool = False):
 
-        self.render_both(view_matrix, annotation_volume, energy_volumes, image_size, image)
-        return
-
+        # self.render_both(view_matrix, annotation_volume, energy_volumes, image_size, image)
         # TODO: Implement your code considering these volumes (annotation_volume, and energy_volumes)
-        self.render_flat_surface(view_matrix, annotation_volume, image_size, image)
-        for key in energy_volumes:
-            self.render_energy(view_matrix, energy_volumes[key], image_size, image)
+        if quick:
+            self.render_slicer(view_matrix, annotation_volume, image_size, image)
+        else:
+            self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
+        
+        # volume = Volume(np.where(annotation_volume.data > 0, np.ones_like(annotation_volume.data), np.zeros_like(annotation_volume.data)))
+        # # self.render_flat_surface(view_matrix, volume, image_size, image)
+        # self.render_mip(view_matrix, volume, image_size, image)
+        # for key in energy_volumes:
+        #     self.render_energy(view_matrix, energy_volumes[key], image_size, image)
 
 
 class GradientVolumeImpl(GradientVolume):
