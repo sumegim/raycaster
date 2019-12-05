@@ -1,14 +1,8 @@
 # Custom ignores
-genevis/
-gui/
-util/
-volume/__init__.py
-volume/volumeIO.py
-main.py
 mapping.pkl
 *.pdf
 *.whl
-
+*/__init__.py
 
 # Created by https://www.gitignore.io/api/python,visualstudiocode
 # Edit at https://www.gitignore.io/?templates=python,visualstudiocode
