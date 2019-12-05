@@ -343,8 +343,11 @@ class RaycastRendererImplementation(RaycastRenderer):
                 c_prev = TFColor(0, 0, 0, 0)
                 for k in range(len(vec_k)):
                     # Get the voxel coordinate X
+                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    if vx < 1:
+                        continue
 
-                    c_i = self.tfunc.get_color(get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                    c_i = self.tfunc.get_color(vx)
                     # Get voxel value
 
                     # # Normalize value to be between 0 and 1
@@ -365,7 +368,62 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
-    def render_annotation_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray, s_start = -50, s_stop = 50):
+    def render_annotation_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        self.clear_image()
+        u_vector = view_matrix[0:3]
+        v_vector = view_matrix[4:7]
+        view_vector = view_matrix[8:11]
+        image_center = image_size / 2
+        volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
+        volume_maximum = volume.get_maximum()
+
+        # Define a step size to make the loop faster
+        step = 2 if self.interactive_mode else 1
+
+        for i in tqdm(range(0, image_size, step)):
+            for j in range(0, image_size, step):
+
+                vec_k = np.arange(100, -100, -2)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                c_prev = TFColor(0, 0, 0, 0)
+                default_gamma = 0.5
+
+                for k in range(len(vec_k)):
+
+                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    if vx < 1:
+                        continue
+
+                    c_i = colour_table.loc[vx]
+
+                    c_prev.r = c_i.r * default_gamma + (1 - default_gamma) * c_prev.r
+                    c_prev.g = c_i.g * default_gamma + (1 - default_gamma) * c_prev.g
+                    c_prev.b = c_i.b * default_gamma + (1 - default_gamma) * c_prev.b
+
+                # Compute the color value (0...255)
+                red = math.floor(c_prev.r * 255) if c_prev.r < 255 else 255
+                green = math.floor(c_prev.g * 255) if c_prev.g < 255 else 255
+                blue = math.floor(c_prev.b * 255) if c_prev.b < 255 else 255
+                alpha = 255
+
+                # Assign color to the pixel i, j
+                image[(j * image_size + i) * 4] = red
+                image[(j * image_size + i) * 4 + 1] = green
+                image[(j * image_size + i) * 4 + 2] = blue
+                image[(j * image_size + i) * 4 + 3] = alpha
+
+    def render_annotation_compositing_old(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray, s_start = -50, s_stop = 50):
         # Clear the image
         self.clear_image()
 
@@ -738,30 +796,14 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
-
-
-        pass
-
     def colored_q_slice(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
-        # Clear the image
         self.clear_image()
-
-        # U vector. See documentation in parent's class
         u_vector = view_matrix[0:3]
-
-        # V vector. See documentation in parent's class
         v_vector = view_matrix[4:7]
-
-        # View vector. See documentation in parent's class
         view_vector = view_matrix[8:11]
-
-        # Center of the image. Image is squared
         image_center = image_size / 2
-
-        # Center of the volume (3-dimensional)
         volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
         volume_maximum = volume.get_maximum()
-
 
         # Define a step size to make the loop faster
         step = 2 if self.interactive_mode else 1
@@ -807,7 +849,6 @@ class RaycastRendererImplementation(RaycastRenderer):
                     green = math.floor(voxel_colour.g * 255) if voxel_colour.g < 1 else 255
                     blue = math.floor(voxel_colour.b * 255) if voxel_colour.b < 1 else 255
                     alpha = 255
-
 
                 # Assign color to the pixel i, j
                 image[(j * image_size + i) * 4] = red
