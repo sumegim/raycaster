@@ -365,7 +365,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
-    def render_annotation_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+    def render_annotation_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray, s_start = -50, s_stop = 50):
         # Clear the image
         self.clear_image()
 
@@ -380,8 +380,8 @@ class RaycastRendererImplementation(RaycastRenderer):
         volume_maximum = volume.get_maximum()
 
         max_range = max(volume.dim_x, volume.dim_y, volume.dim_y)
-        sample_start = -100 / 2
-        sample_end = 100 / 2
+        sample_start = s_start
+        sample_end = s_stop
         sample_step = 1
         n_samples = math.ceil((sample_end - sample_start) / sample_step)
         view_samples = np.arange(sample_start, sample_end, sample_step)
@@ -417,18 +417,10 @@ class RaycastRendererImplementation(RaycastRenderer):
                 else:
                     values = pd.Series([0,0,0,0,0], index=['r','g','b','a','t'])
 
-                # Flip dataframe to perform back-to-front
-                # voxel_colours_reversed = voxel_colours.iloc[::-1]
-                # values = voxel_colours_reversed[['r', 'g', 'b']].mul(
-                #     voxel_colours_reversed['a'], axis=0
-                # ).cumsum().mul(
-                #     voxel_colours_reversed['t'].cumprod(), axis=0
-                # ).iloc[-1]
-                # Compute the color value (0...255)
                 red = math.floor(values.r * 255) if values.r < 1 else 255
                 green = math.floor(values.g * 255) if values.g < 1 else 255
                 blue = math.floor(values.b * 255) if values.b < 1 else 255
-                alpha = math.floor(values.a * 255) if values.a < 1 else 255
+                alpha = 255
 
                 # r = 0
                 # g = 0
@@ -451,6 +443,71 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         if only_zeros:
             print("There were only zeros..")
+
+    def add_phong_shading(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        # U vector. See documentation in parent's class
+        u_vector = view_matrix[0:3]
+
+        # V vector. See documentation in parent's class
+        v_vector = view_matrix[4:7]
+
+        # View vector. See documentation in parent's class
+        view_vector = view_matrix[8:11]
+
+        # Center of the image. Image is squared
+        image_center = image_size / 2
+
+        # Center of the volume (3-dimensional)
+        volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
+        volume_maximum = volume.get_maximum()
+
+        L = np.array(view_vector)
+
+        # Define a step size to make the loop faster
+        step = 2 if self.interactive_mode else 1
+
+        for i in range(0, image_size, step):
+            for j in range(0, image_size, step):
+
+                vec_k = np.arange(-100, 100, 1)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                vx = 0
+                N = np.zeros(3)
+                found = False
+                for k in range(len(vec_k)):
+                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    if vx > 1:
+                        found = True
+                        delta_f = self.annotation_gradient_volume.get_gradient(vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        magnitude_f = delta_f.magnitude
+                        N[0] = delta_f.x / magnitude_f
+                        N[1] = delta_f.y / magnitude_f
+                        N[2] = delta_f.z / magnitude_f
+                        break
+
+                # Normalize value to be between 0 and 1
+                if found:
+                    shadow = (np.dot(N.reshape(1, 3), L) + 1) / 2
+                else:
+                    shadow = 0
+                #shadow = math.floor(shadow * 255) if shadow < 255 else 255
+                # Assign color to the pixel i, j
+                if shadow < 220:
+                    image[(j * image_size + i) * 4] *= shadow
+                    image[(j * image_size + i) * 4 + 1] *= shadow
+                    image[(j * image_size + i) * 4 + 2] *= shadow
+                    image[(j * image_size + i) * 4 + 3] = 255
 
     def render_flat_surface(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         # Clear the image
@@ -685,15 +742,90 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         pass
 
+    def colored_q_slice(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+        # Clear the image
+        self.clear_image()
+
+        # U vector. See documentation in parent's class
+        u_vector = view_matrix[0:3]
+
+        # V vector. See documentation in parent's class
+        v_vector = view_matrix[4:7]
+
+        # View vector. See documentation in parent's class
+        view_vector = view_matrix[8:11]
+
+        # Center of the image. Image is squared
+        image_center = image_size / 2
+
+        # Center of the volume (3-dimensional)
+        volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
+        volume_maximum = volume.get_maximum()
+
+
+        # Define a step size to make the loop faster
+        step = 2 if self.interactive_mode else 1
+
+        for i in range(0, image_size, step):
+            for j in range(0, image_size, step):
+
+                vec_k = np.arange(0, 2, 1)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                vx = 0
+                N = np.zeros(3)
+                for k in range(len(vec_k)):
+                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    if vx > 1:
+                        delta_f = self.annotation_gradient_volume.get_gradient(vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        magnitude_f = delta_f.magnitude
+                        N[0] = delta_f.x / magnitude_f
+                        N[1] = delta_f.y / magnitude_f
+                        N[2] = delta_f.z / magnitude_f
+                        break
+
+                # Get colours for voxels
+                voxel_colour = colour_table.loc[vx]
+
+                if vx == 0:
+                    red = 0
+                    green = 0
+                    blue = 0
+                    alpha = 0
+                else:
+                    red = math.floor(voxel_colour.r * 255) if voxel_colour.r < 1 else 255
+                    green = math.floor(voxel_colour.g * 255) if voxel_colour.g < 1 else 255
+                    blue = math.floor(voxel_colour.b * 255) if voxel_colour.b < 1 else 255
+                    alpha = 255
+
+
+                # Assign color to the pixel i, j
+                image[(j * image_size + i) * 4] = red
+                image[(j * image_size + i) * 4 + 1] = green
+                image[(j * image_size + i) * 4 + 2] = blue
+                image[(j * image_size + i) * 4 + 3] = alpha
+
+
     def render_mouse_brain(self, view_matrix: np.ndarray, annotation_volume: Volume, energy_volumes: dict,
                            image_size: int, image: np.ndarray, quick: bool = False):
 
         # self.render_both(view_matrix, annotation_volume, energy_volumes, image_size, image)
         # TODO: Implement your code considering these volumes (annotation_volume, and energy_volumes)
         if quick:
-            self.render_slicer(view_matrix, annotation_volume, image_size, image)
+            self.colored_q_slice(view_matrix, annotation_volume, image_size, image)
         else:
             self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
+            self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
         
         # volume = Volume(np.where(annotation_volume.data > 0, np.ones_like(annotation_volume.data), np.zeros_like(annotation_volume.data)))
         # # self.render_flat_surface(view_matrix, volume, image_size, image)
