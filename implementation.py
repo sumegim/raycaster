@@ -115,12 +115,16 @@ def interpolate(volume: Volume, points_raw: np.ndarray, view_inverse: np.ndarray
 
     # Vectorized vertices
     # Could be a bit slow for list comprehension, might change
-    points = (view_inverse @ points_raw.T).T
+    # points = (view_inverse @ points_raw.T).T
+    points = points_raw
 
     coords_raw = np.stack([np.floor(points), np.ceil(points)], axis=1)
     condition = np.diff(coords_raw, axis=1).astype(bool)
     broad_condition = np.broadcast_to(condition, coords_raw.shape)
-    coords = np.where(broad_condition, coords_raw, np.array([[coords_raw[~broad_condition][0]], [coords_raw[~broad_condition][1] + 1]]))
+    if broad_condition.all():
+        coords = coords_raw
+    else:
+        coords = np.where(broad_condition, coords_raw, np.array([[coords_raw[~broad_condition][0]], [coords_raw[~broad_condition][1] + 1]]))
     
     vertices_of_point = np.array([list(product(coords[i][:,0], coords[i][:,1], coords[i][:,2])) 
                                   for i in range(coords.shape[0])])
@@ -407,7 +411,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                 # Get colours for voxels
                 voxel_colours = colour_table.loc[voxels.flatten()]
                 # Add opacities based on order of ray
-                voxel_colours['a'] = np.linspace(0.1, 1, voxel_colours.shape[0], endpoint=True)
+                voxel_colours['a'] = np.full(voxel_colours.shape[0], 0.5)
                 voxel_colours['t'] = 1 - voxel_colours['a']
 
                 # Exclude black points from computation
@@ -417,26 +421,30 @@ class RaycastRendererImplementation(RaycastRenderer):
                 else:
                     values = pd.Series([0,0,0,0,0], index=['r','g','b','a','t'])
 
-                # Flip dataframe to perform back-to-front
-                # voxel_colours_reversed = voxel_colours.iloc[::-1]
-                # values = voxel_colours_reversed[['r', 'g', 'b']].mul(
-                #     voxel_colours_reversed['a'], axis=0
-                # ).cumsum().mul(
-                #     voxel_colours_reversed['t'].cumprod(), axis=0
-                # ).iloc[-1]
+                # # Flip dataframe to perform back-to-front
+                # # voxel_colours_reversed = voxel_colours.iloc[::-1]
+                # # values = voxel_colours_reversed[['r', 'g', 'b']].mul(
+                # #     voxel_colours_reversed['a'], axis=0
+                # # ).cumsum().mul(
+                # #     voxel_colours_reversed['t'].cumprod(), axis=0
+                # # ).iloc[-1]
                 # Compute the color value (0...255)
                 red = math.floor(values.r * 255) if values.r < 1 else 255
                 green = math.floor(values.g * 255) if values.g < 1 else 255
                 blue = math.floor(values.b * 255) if values.b < 1 else 255
-                alpha = math.floor(values.a * 255) if values.a < 1 else 255
+                alpha = 255
 
+                # voxel_colours_reversed = voxel_colours.iloc[::-1]
                 # r = 0
                 # g = 0
                 # b = 0
                 # for i, row in voxel_colours_reversed.iterrows():
-                #     r = row.r * row.a + row.t * r
-                #     g = row.g * row.a + row.t * g
-                #     b = row.b * row.a + row.t * b
+                #     if (row != 0).any():
+                #         r = row.r * row.a + row.t * r
+                #         g = row.g * row.a + row.t * g
+                #         b = row.b * row.a + row.t * b
+                #     else:
+                #         break
                 # # Compute the color value (0...255)
                 # red = math.floor(r * 255) if r < 255 else 255
                 # green = math.floor(g * 255) if g < 255 else 255
