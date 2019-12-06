@@ -1,3 +1,4 @@
+from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 from genevis.render import RaycastRenderer
@@ -869,17 +870,106 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
+    def render_energies(self, view_matrix: np.ndarray, energies_volumes: Dict[int, Volume], image_size: int, image: np.ndarray):
+        # Prepare volumes
+        for energy_volume in energies_volumes.values():
+            # Normalize all data
+            energy_volume.data = np.where(energy_volume.data < 0, energy_volume.data, energy_volume.data / energy_volume.data.max())
+
+        shape = next(iter(energies_volumes.values())).data.shape
+
+        # genes_colours : Dict[int, Tuple[int, int, int]]= {}
+        # for key in energies_volumes.keys():
+        #     genes_colours[key] = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+
+        red_volume = np.zeros(shape)
+        green_volume = np.zeros(shape)
+        blue_volume = np.zeros(shape)
+
+        # red_sum = np.zeros(shape); green_sum = np.zeros(shape); blue_sum = np.zeros(shape)
+        intensity_sum = np.zeros(shape)
+        for gene, energy_volume in energies_volumes.items():
+            red_volume = red_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][0], np.zeros(shape))
+            green_volume = green_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][1], np.zeros(shape))
+            blue_volume = blue_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][2], np.zeros(shape))
+            
+            intensity_sum = intensity_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
+            # red_sum = red_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
+            # green_sum = green_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
+            # blue_sum = blue_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
+        
+        divide_matrix = np.where(intensity_sum > 0, np.around(intensity_sum, 3), np.ones(shape))
+        red_volume = Volume(np.divide(red_volume, divide_matrix))
+        green_volume = Volume(np.divide(green_volume, divide_matrix))
+        blue_volume = Volume(np.divide(blue_volume, divide_matrix))
+
+        # Composite
+        self.clear_image()
+        u_vector = view_matrix[0:3]
+        v_vector = view_matrix[4:7]
+        view_vector = view_matrix[8:11]
+        image_center = image_size / 2
+        volume_center = [dim / 2 for dim in shape]
+
+        step = 2 if self.interactive_mode else 1
+        for i in tqdm(range(0, image_size, step)):
+            for j in range(0, image_size, step):
+
+                vec_k = np.arange(100, -100, -1)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                c_prev = TFColor(0, 0, 0, 0)
+                for k in range(len(vec_k)):
+                    red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    
+                    # Takes 25 mins..
+                    # red_vx = interpolate(red_volume, np.array([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]).reshape(1,3))
+                    # green_vx = interpolate(green_volume, np.array([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]).reshape(1,3))
+                    # blue_vx = interpolate(blue_volume, np.array([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]).reshape(1,3))
+                    if red_vx <= 0.001 or green_vx <= 0.001 or blue_vx <= 0.001:
+                        continue
+                    
+                    default_gamma = get_voxel(Volume(intensity_sum, compute_histogram=False), 
+                                              vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    c_prev.r = red_vx * default_gamma + (1 - default_gamma) * c_prev.r
+                    c_prev.g = green_vx * default_gamma + (1 - default_gamma) * c_prev.g
+                    c_prev.b = blue_vx * default_gamma + (1 - default_gamma) * c_prev.b
+
+                # Compute the color value (0...255)
+                red = c_prev.r if c_prev.r < 255 else 255
+                green = c_prev.g if c_prev.g < 255 else 255
+                blue = c_prev.b if c_prev.b < 255 else 255
+                alpha = 150
+
+                # Assign color to the pixel i, j
+                image[(j * image_size + i) * 4] = red
+                image[(j * image_size + i) * 4 + 1] = green
+                image[(j * image_size + i) * 4 + 2] = blue
+                image[(j * image_size + i) * 4 + 3] = alpha
+
     def render_mouse_brain(self, view_matrix: np.ndarray, annotation_volume: Volume, energy_volumes: dict,
                            image_size: int, image: np.ndarray, quick: bool = False):
 
         # self.render_both(view_matrix, annotation_volume, energy_volumes, image_size, image)
         # TODO: Implement your code considering these volumes (annotation_volume, and energy_volumes)
         if quick:
-            self.colored_q_slice(view_matrix, annotation_volume, image_size, image)
+            self.render_slicer(view_matrix, annotation_volume, image_size, image)
         else:
-            self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
-            self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
-        
+            self.render_energies(view_matrix, energy_volumes, image_size, image)
+            # self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
+            # self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
         # volume = Volume(np.where(annotation_volume.data > 0, np.ones_like(annotation_volume.data), np.zeros_like(annotation_volume.data)))
         # # self.render_flat_surface(view_matrix, volume, image_size, image)
         # self.render_mip(view_matrix, volume, image_size, image)
