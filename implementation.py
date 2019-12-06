@@ -90,6 +90,22 @@ def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarr
         return final_value
 
 
+def get_matrix_for_value_interpolation(volume, x, y, z):
+    basex = math.floor(x)
+    basey = math.floor(y)
+    basez = math.floor(z)
+
+    values = []
+
+    for ii in range(8):
+        a = 1 if ii & 4 > 0 else 0
+        b = 1 if ii & 2 > 0 else 0
+        c = 1 if ii & 1 > 0 else 0
+        values.append(
+            [basex + a, basey + b, basez + c, get_voxel(volume, basex + a, basey + b, basez + c)])
+
+    return np.array(values)
+
 def get_RGB_matrices_for_color_interpolation(volume, x, y, z):
     basex = math.floor(x)
     basey = math.floor(y)
@@ -288,8 +304,8 @@ class RaycastRendererImplementation(RaycastRenderer):
                 points = (basis_matrix @ raw_points) + \
                     volume_center.reshape(-1, 1)
 
-                # voxels = interpolate(volume, points.T, view_inverse)
-                voxels = get_voxels(volume, points[0], points[1], points[2])
+                voxels = interpolate(volume, points.T)
+                # voxels = get_voxels(volume, points[0], points[1], points[2])
 
                 value = voxels.max()
                 red = value / volume_maximum
@@ -337,10 +353,10 @@ class RaycastRendererImplementation(RaycastRenderer):
         # Define a step size to make the loop faster
         step = 2 if self.interactive_mode else 1
 
-        for i in range(0, image_size, step):
+        for i in tqdm(range(0, image_size, step)):
             for j in range(0, image_size, step):
 
-                vec_k = np.arange(100, -100, -2)
+                vec_k = np.arange(50, -50, -10)
                 x_k = vec_k * view_vector[0]
                 y_k = vec_k * view_vector[1]
                 z_k = vec_k * view_vector[2]
@@ -356,7 +372,13 @@ class RaycastRendererImplementation(RaycastRenderer):
                 c_prev = TFColor(0, 0, 0, 0)
                 for k in range(len(vec_k)):
 
-                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    if True:
+                        vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    else:
+                        point = [vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]
+                        vertices = get_matrix_for_value_interpolation(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        vx = single_trilinear_interpolation(point, vertices)
+
                     if vx < 1:
                         continue
 
