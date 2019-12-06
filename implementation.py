@@ -516,7 +516,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                     image[(j * image_size + i) * 4 + 2] *= shadow
                     image[(j * image_size + i) * 4 + 3] = 255
 
-    def render_flat_surface(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
+    def render_flat_surface(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray, see_through=False):
         # Clear the image
         self.clear_image()
         u_vector = view_matrix[0:3]
@@ -570,10 +570,17 @@ class RaycastRendererImplementation(RaycastRenderer):
                 green = math.floor(shadow * 255) if shadow < 1 else 255
                 blue = math.floor(shadow * 255) if shadow < 1 else 255
 
-                image[(j * image_size + i) * 4] = red
-                image[(j * image_size + i) * 4 + 1] = green
-                image[(j * image_size + i) * 4 + 2] = blue
-                image[(j * image_size + i) * 4 + 3] = alpha
+                if see_through:
+                    gamma = 0.3
+                    image[(j * image_size + i) * 4] = gamma * image[(j * image_size + i) * 4] + (1-gamma) * red
+                    image[(j * image_size + i) * 4 + 1] = gamma * image[(j * image_size + i) * 4 + 1] + (1-gamma) * green
+                    image[(j * image_size + i) * 4 + 2] = gamma * image[(j * image_size + i) * 4 + 2] + (1-gamma) * blue
+                    image[(j * image_size + i) * 4 + 3] = alpha
+                else:
+                    image[(j * image_size + i) * 4] = red
+                    image[(j * image_size + i) * 4 + 1] = green
+                    image[(j * image_size + i) * 4 + 2] = blue
+                    image[(j * image_size + i) * 4 + 3] = alpha
 
     def colored_q_slice(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         self.clear_image()
@@ -736,9 +743,9 @@ class RaycastRendererImplementation(RaycastRenderer):
             self.render_slicer(view_matrix, annotation_volume, image_size, image)
         else:
             self.render_energies(view_matrix, energy_volumes, image_size, image)
+            self.render_flat_surface(view_matrix, annotation_volume, image_size, image, see_through=True)
             # self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
             # self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
-            # self.render_flat_surface(view_matrix, annotation_volume, image_size, image)
 
 
 class GradientVolumeImpl(GradientVolume):
