@@ -570,29 +570,11 @@ class RaycastRendererImplementation(RaycastRenderer):
     def render_flat_surface(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         # Clear the image
         self.clear_image()
-
-        # U vector. See documentation in parent's class
         u_vector = view_matrix[0:3]
-
-        # V vector. See documentation in parent's class
         v_vector = view_matrix[4:7]
-
-        # View vector. See documentation in parent's class
         view_vector = view_matrix[8:11]
-
-        # Center of the image. Image is squared
         image_center = image_size / 2
-
-        # Center of the volume (3-dimensional)
         volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
-        volume_maximum = volume.get_maximum()
-
-        L = np.array([-1, 1, -1]).reshape(-1, 1)
-        L = L / np.linalg.norm(L)
-        basis_matrix = np.stack([view_matrix[0:3], view_matrix[4:7], view_matrix[8:11]]).T
-        view_inverse = np.linalg.inv(basis_matrix)
-        volume_center = np.array([volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2])
-        L = (basis_matrix @ L) + volume_center.reshape(-1, 1)
 
         L = np.array(view_vector)
 
@@ -617,11 +599,11 @@ class RaycastRendererImplementation(RaycastRenderer):
 
                 vx = 0
                 N = np.zeros(3)
+                found = False
                 for k in range(len(vec_k)):
-                    # Get the voxel coordinate X
-                    # vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
-                    # vx = interpolate(volume, )
+                    vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     if vx > 1:
+                        found = True
                         delta_f = self.annotation_gradient_volume.get_gradient(vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                         magnitude_f = delta_f.magnitude
                         N[0] = delta_f.x / magnitude_f
@@ -630,18 +612,17 @@ class RaycastRendererImplementation(RaycastRenderer):
                         break
 
                 # Normalize value to be between 0 and 1
-                red = (10 * vx + (vx * np.dot(N.reshape(1, 3), L))) / (2 * volume_maximum)
-                green = red
-                blue = red
-                alpha = 1 if red > 0 else 0.0
+                if found:
+                    shadow = (np.dot(N.reshape(1, 3), L) + 1) / 2
+                    alpha = 255
+                else:
+                    shadow = 0
+                    alpha = 0
 
-                # Compute the color value (0...255)
-                red = math.floor(red * 255) if red < 255 else 255
-                green = math.floor(green * 255) if green < 255 else 255
-                blue = math.floor(blue * 255) if blue < 255 else 255
-                alpha = math.floor(alpha * 255) if alpha < 255 else 255
+                red = math.floor(shadow * 255) if shadow < 1 else 255
+                green = math.floor(shadow * 255) if shadow < 1 else 255
+                blue = math.floor(shadow * 255) if shadow < 1 else 255
 
-                # Assign color to the pixel i, j
                 image[(j * image_size + i) * 4] = red
                 image[(j * image_size + i) * 4 + 1] = green
                 image[(j * image_size + i) * 4 + 2] = blue
@@ -867,6 +848,7 @@ class RaycastRendererImplementation(RaycastRenderer):
         else:
             self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
             self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
+            # self.render_flat_surface(view_matrix, annotation_volume, image_size, image)
         
         # volume = Volume(np.where(annotation_volume.data > 0, np.ones_like(annotation_volume.data), np.zeros_like(annotation_volume.data)))
         # # self.render_flat_surface(view_matrix, volume, image_size, image)
