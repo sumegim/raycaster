@@ -18,7 +18,7 @@ colour_table = colour_table.apply(lambda col: col.apply(int, base=16), axis=0)
 colour_table = colour_table / 255                                                    # Normalize the data
 colour_table = colour_table.append(pd.Series([0,0,0], name=0, index=['r','g','b']))  # Add black
 
-def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray, view_inverse: np.ndarray) -> float:
+def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray) -> float:
     """
     Retrieves the interpolated value of a 3D point from the surrounding points.
     :param point: The 3D point for which we want to calculate the linearly interpolated value, with shape (3,)
@@ -101,7 +101,7 @@ def get_voxel(volume: Volume, x: float, y: float, z: float):
 
     return volume.data[x, y, z]
 
-def interpolate(volume: Volume, points_raw: np.ndarray, view_inverse: np.ndarray):
+def interpolate(volume: Volume, points_raw: np.ndarray):
     """ 
     :param points_raw: shape == (n_points, 3)
     """
@@ -133,7 +133,7 @@ def interpolate(volume: Volume, points_raw: np.ndarray, view_inverse: np.ndarray
     vertices_raw = [np.concatenate([vertices_of_point[i], values[i].reshape(-1,1)], axis=1) 
                     for i in range(vertices_of_point.shape[0])]
     
-    final_values = np.array([single_trilinear_interpolation(points[i], vertices_raw[i], view_inverse) 
+    final_values = np.array([single_trilinear_interpolation(points[i], vertices_raw[i]) 
                              for i in range(points.shape[0])])
     return final_values
 
@@ -404,7 +404,6 @@ class RaycastRendererImplementation(RaycastRenderer):
                 default_gamma = 0.5
 
                 for k in range(len(vec_k)):
-
                     vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     if vx < 1:
                         continue
@@ -863,7 +862,6 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 1] = green
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
-
 
     def render_mouse_brain(self, view_matrix: np.ndarray, annotation_volume: Volume, energy_volumes: dict,
                            image_size: int, image: np.ndarray, quick: bool = False):
