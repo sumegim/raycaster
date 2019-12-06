@@ -356,7 +356,7 @@ class RaycastRendererImplementation(RaycastRenderer):
         for i in tqdm(range(0, image_size, step)):
             for j in range(0, image_size, step):
 
-                vec_k = np.arange(50, -50, -10)
+                vec_k = np.arange(100, -100, -1)
                 x_k = vec_k * view_vector[0]
                 y_k = vec_k * view_vector[1]
                 z_k = vec_k * view_vector[2]
