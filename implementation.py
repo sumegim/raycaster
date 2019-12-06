@@ -329,21 +329,17 @@ class RaycastRendererImplementation(RaycastRenderer):
 
                 c_prev = TFColor(0, 0, 0, 0)
                 for k in range(len(vec_k)):
-                    # Get the voxel coordinate X
+
                     vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     if vx < 1:
                         continue
 
                     c_i = self.tfunc.get_color(vx)
-                    # Get voxel value
 
-                    # # Normalize value to be between 0 and 1
                     c_prev.r = c_i.r * c_i.a + (1 - c_i.a) * c_prev.r
                     c_prev.g = c_i.g * c_i.a + (1 - c_i.a) * c_prev.g
                     c_prev.b = c_i.b * c_i.a + (1 - c_i.a) * c_prev.b
 
-
-                # Compute the color value (0...255)
                 red = math.floor(c_prev.r * 255) if c_prev.r < 255 else 255
                 green = math.floor(c_prev.g * 255) if c_prev.g < 255 else 255
                 blue = math.floor(c_prev.b * 255) if c_prev.b < 255 else 255
@@ -448,7 +444,6 @@ class RaycastRendererImplementation(RaycastRenderer):
                 vc_vec_y = vc_base_y + y_k
                 vc_vec_z = vc_base_z + z_k
 
-                vx = 0
                 N = np.zeros(3)
                 found = False
                 for k in range(len(vec_k)):
@@ -467,8 +462,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                     shadow = (np.dot(N.reshape(1, 3), L) + 1) / 2
                 else:
                     shadow = 0
-                #shadow = math.floor(shadow * 255) if shadow < 255 else 255
-                # Assign color to the pixel i, j
+
                 if shadow < 220:
                     image[(j * image_size + i) * 4] *= shadow
                     image[(j * image_size + i) * 4 + 1] *= shadow
@@ -505,7 +499,6 @@ class RaycastRendererImplementation(RaycastRenderer):
                 vc_vec_y = vc_base_y + y_k
                 vc_vec_z = vc_base_z + z_k
 
-                vx = 0
                 N = np.zeros(3)
                 found = False
                 for k in range(len(vec_k)):
@@ -524,8 +517,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                     shadow = (np.dot(N.reshape(1, 3), L) + 1) / 2
                     alpha = 255
                 else:
-                    shadow = 0
-                    alpha = 0
+                    shadow = alpha = 0
 
                 red = math.floor(shadow * 255) if shadow < 1 else 255
                 green = math.floor(shadow * 255) if shadow < 1 else 255
@@ -543,7 +535,6 @@ class RaycastRendererImplementation(RaycastRenderer):
         view_vector = view_matrix[8:11]
         image_center = image_size / 2
         volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
-        volume_maximum = volume.get_maximum()
 
         # Define a step size to make the loop faster
         step = 2 if self.interactive_mode else 1
@@ -580,10 +571,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                 voxel_colour = colour_table.loc[vx]
 
                 if vx == 0:
-                    red = 0
-                    green = 0
-                    blue = 0
-                    alpha = 0
+                    red = green = blue = alpha = 0
                 else:
                     red = math.floor(voxel_colour.r * 255) if voxel_colour.r < 1 else 255
                     green = math.floor(voxel_colour.g * 255) if voxel_colour.g < 1 else 255
