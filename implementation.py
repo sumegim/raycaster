@@ -898,7 +898,9 @@ class RaycastRendererImplementation(RaycastRenderer):
             # green_sum = green_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
             # blue_sum = blue_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
         
-        divide_matrix = np.where(intensity_sum > 0, np.around(intensity_sum, 3), np.ones(shape))
+        intensity_sum = np.around(intensity_sum, 3)
+        intensity_sum = np.where(intensity_sum > 1, np.ones(shape), intensity_sum)
+        divide_matrix = np.where(intensity_sum > 0, intensity_sum, np.ones(shape))
         red_volume = Volume(np.divide(red_volume, divide_matrix))
         green_volume = Volume(np.divide(green_volume, divide_matrix))
         blue_volume = Volume(np.divide(blue_volume, divide_matrix))
