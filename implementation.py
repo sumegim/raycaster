@@ -650,10 +650,6 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         shape = next(iter(energies_volumes.values())).data.shape
 
-        # genes_colours : Dict[int, Tuple[int, int, int]]= {}
-        # for key in energies_volumes.keys():
-        #     genes_colours[key] = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
-
         red_volume = np.zeros(shape)
         green_volume = np.zeros(shape)
         blue_volume = np.zeros(shape)
@@ -666,9 +662,6 @@ class RaycastRendererImplementation(RaycastRenderer):
             blue_volume = blue_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][2], np.zeros(shape))
             
             intensity_sum = intensity_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
-            # red_sum = red_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
-            # green_sum = green_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
-            # blue_sum = blue_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
         
         intensity_sum = np.around(intensity_sum, 3)
         intensity_sum = np.where(intensity_sum > 1, np.ones(shape), intensity_sum)
@@ -704,14 +697,17 @@ class RaycastRendererImplementation(RaycastRenderer):
 
                 c_prev = TFColor(0, 0, 0, 0)
                 for k in range(len(vec_k)):
+                    # red_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                    #                                         get_matrix_for_value_interpolation(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                    # green_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                    #                                         get_matrix_for_value_interpolation(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                    # blue_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                    #                                         get_matrix_for_value_interpolation(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                    
                     red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     
-                    # Takes 25 mins..
-                    # red_vx = interpolate(red_volume, np.array([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]).reshape(1,3))
-                    # green_vx = interpolate(green_volume, np.array([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]).reshape(1,3))
-                    # blue_vx = interpolate(blue_volume, np.array([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]).reshape(1,3))
                     if red_vx <= 0.001 or green_vx <= 0.001 or blue_vx <= 0.001:
                         continue
                     
@@ -739,8 +735,9 @@ class RaycastRendererImplementation(RaycastRenderer):
         if quick:
             self.render_slicer(view_matrix, annotation_volume, image_size, image)
         else:
-            self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
-            self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
+            self.render_energies(view_matrix, energy_volumes, image_size, image)
+            # self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
+            # self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
             # self.render_flat_surface(view_matrix, annotation_volume, image_size, image)
 
 
