@@ -18,10 +18,10 @@ colour_table = colour_table.apply(lambda col: col.apply(int, base=16), axis=0)
 colour_table = colour_table / 255                                                    # Normalize the data
 colour_table = colour_table.append(pd.Series([0,0,0], name=0, index=['r','g','b']))  # Add black
 
-def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray, view_inverse: np.ndarray) -> float:
+def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray) -> float:
     """
     Retrieves the interpolated value of a 3D point from the surrounding points.
-    :param point: The 3D point for which we want to calculate the linearly interpolated value, with shape (3,)
+    :param point_raw: The 3D point for which we want to calculate the linearly interpolated value, with shape (3,)
     :param vertices_raw: Array of all points surrounding the point of interest, with shape (8, 4)
         8 points of a cube and 3 dimensions (x, y, z) plus the value for each vertex.
     :param view_inverse: The inverse of the transformation matrix provided by the framework
@@ -82,6 +82,25 @@ def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarr
 
         return final_value
 
+
+def get_RGB_matrices_for_color_interpolation(volume, x, y, z):
+    basex = math.floor(x)
+    basey = math.floor(y)
+    basez = math.floor(z)
+
+    red = []
+    green = []
+    blue = []
+
+    for ii in range(8):
+        a = 1 if ii & 4 > 0 else 0
+        b = 1 if ii & 2 > 0 else 0
+        c = 1 if ii & 1 > 0 else 0
+        red.append([basex + a, basey + b, basez + c, colour_table.loc[get_voxel(volume, basex + a, basey + b, basez + c)].r])
+        green.append([basex + a, basey + b, basez + c, colour_table.loc[get_voxel(volume, basex + a, basey + b, basez + c)].g])
+        blue.append([basex + a, basey + b, basez + c, colour_table.loc[get_voxel(volume, basex + a, basey + b, basez + c)].b])
+
+    return [np.array(red), np.array(green), np.array(blue)]
 
 def get_voxel(volume: Volume, x: float, y: float, z: float):
     """
@@ -557,6 +576,7 @@ class RaycastRendererImplementation(RaycastRenderer):
 
                 vx = 0
                 N = np.zeros(3)
+
                 for k in range(len(vec_k)):
                     vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     if vx > 1:
@@ -565,6 +585,16 @@ class RaycastRendererImplementation(RaycastRenderer):
                         N[0] = delta_f.x / magnitude_f
                         N[1] = delta_f.y / magnitude_f
                         N[2] = delta_f.z / magnitude_f
+
+                        # USAGE OF COLOR INTERPOLATION
+                        # coords = np.asarray([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]])
+                        #
+                        # rgb_matrices = get_RGB_matrices_for_color_interpolation(volume, vc_vec_x[k], vc_vec_y[k],
+                        #                                                         vc_vec_z[k])
+                        # red = single_trilinear_interpolation(coords, rgb_matrices[0])
+                        # green = single_trilinear_interpolation(coords, rgb_matrices[1])
+                        # blue = single_trilinear_interpolation(coords, rgb_matrices[2])
+
                         break
 
                 # Get colours for voxels
@@ -594,7 +624,6 @@ class RaycastRendererImplementation(RaycastRenderer):
             self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
             self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
             # self.render_flat_surface(view_matrix, annotation_volume, image_size, image)
-
 
 
 class GradientVolumeImpl(GradientVolume):
