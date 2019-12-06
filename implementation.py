@@ -6,6 +6,7 @@ from volume.volume import GradientVolume, Volume
 from collections.abc import ValuesView
 import math
 from tqdm import tqdm
+import pickle
 
 from itertools import product
 
@@ -17,6 +18,11 @@ colour_table.columns = ["r", "g", "b"]
 colour_table = colour_table.apply(lambda col: col.apply(int, base=16), axis=0)
 colour_table = colour_table / 255                                                    # Normalize the data
 colour_table = colour_table.append(pd.Series([0,0,0], name=0, index=['r','g','b']))  # Add black
+
+# Get the genes colours
+genes_colours : Dict[int, Tuple[int, int, int]] = {}
+with open('genes_colours.pkl', 'rb') as f:
+    genes_colours = pickle.load(f)
 
 def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray) -> float:
     """
