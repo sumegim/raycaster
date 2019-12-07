@@ -723,12 +723,13 @@ class RaycastRendererImplementation(RaycastRenderer):
                     c_prev.r = red_vx * default_gamma + (1 - default_gamma) * c_prev.r
                     c_prev.g = green_vx * default_gamma + (1 - default_gamma) * c_prev.g
                     c_prev.b = blue_vx * default_gamma + (1 - default_gamma) * c_prev.b
+                    c_prev.a = max([default_gamma, c_prev.a])
 
                 # Compute the color value (0...255)
                 red = c_prev.r if c_prev.r < 255 else 255
                 green = c_prev.g if c_prev.g < 255 else 255
                 blue = c_prev.b if c_prev.b < 255 else 255
-                alpha = 150
+                alpha = c_prev.a * 255
 
                 # Assign color to the pixel i, j
                 image[(j * image_size + i) * 4] = red
@@ -743,7 +744,7 @@ class RaycastRendererImplementation(RaycastRenderer):
             self.render_slicer(view_matrix, annotation_volume, image_size, image)
         else:
             self.render_energies(view_matrix, energy_volumes, image_size, image)
-            self.render_flat_surface(view_matrix, annotation_volume, image_size, image, see_through=True)
+            # self.render_flat_surface(view_matrix, annotation_volume, image_size, image, see_through=True)
             # self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
             # self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
 
