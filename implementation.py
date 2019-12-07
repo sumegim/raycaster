@@ -119,9 +119,11 @@ def get_RGB_matrices_for_color_interpolation(volume, x, y, z):
         a = 1 if ii & 4 > 0 else 0
         b = 1 if ii & 2 > 0 else 0
         c = 1 if ii & 1 > 0 else 0
-        red.append([basex + a, basey + b, basez + c, colour_table.loc[get_voxel(volume, basex + a, basey + b, basez + c)].r])
-        green.append([basex + a, basey + b, basez + c, colour_table.loc[get_voxel(volume, basex + a, basey + b, basez + c)].g])
-        blue.append([basex + a, basey + b, basez + c, colour_table.loc[get_voxel(volume, basex + a, basey + b, basez + c)].b])
+        
+        vx = get_voxel(volume, basex + a, basey + b, basez + c)
+        red.append([basex + a, basey + b, basez + c, colour_table.loc[vx].r if vx in colour_table.index else np.random.rand()])
+        green.append([basex + a, basey + b, basez + c, colour_table.loc[vx].g if vx in colour_table.index else np.random.rand()])
+        blue.append([basex + a, basey + b, basez + c, colour_table.loc[vx].b if vx in colour_table.index else np.random.rand()])
 
     return [np.array(red), np.array(green), np.array(blue)]
 
@@ -435,7 +437,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                     if vx < 1:
                         continue
 
-                    c_i = colour_table.loc[vx]
+                            c_i = colour_table.loc[vx]
 
                     c_prev.r = c_i.r * default_gamma + (1 - default_gamma) * c_prev.r
                     c_prev.g = c_i.g * default_gamma + (1 - default_gamma) * c_prev.g
@@ -506,15 +508,16 @@ class RaycastRendererImplementation(RaycastRenderer):
 
                 # Normalize value to be between 0 and 1
                 if found:
-                    shadow = (np.dot(N.reshape(1, 3), L) + 1) / 2
+                    N = np.where(np.isnan(N), np.zeros_like(N), N)
+                    shadow = (np.dot(N, L) + 1) / 2
                 else:
                     shadow = 0
 
-                if shadow < 220:
-                    image[(j * image_size + i) * 4] *= shadow
-                    image[(j * image_size + i) * 4 + 1] *= shadow
-                    image[(j * image_size + i) * 4 + 2] *= shadow
-                    image[(j * image_size + i) * 4 + 3] = 255
+                shadow = shadow * 0.9
+                image[(j * image_size + i) * 4] *= shadow
+                image[(j * image_size + i) * 4 + 1] *= shadow
+                image[(j * image_size + i) * 4 + 2] *= shadow
+                image[(j * image_size + i) * 4 + 3] = 255
 
     def render_flat_surface(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray, see_through=False):
         # Clear the image
@@ -633,7 +636,10 @@ class RaycastRendererImplementation(RaycastRenderer):
                         break
 
                 # Get colours for voxels
-                voxel_colour = colour_table.loc[vx]
+                if vx in colour_table.index:
+                    voxel_colour = colour_table.loc[vx]
+                else:
+                    voxel_colour = TFColor(np.random.rand(), np.random.rand(), np.random.rand())
 
                 if vx == 0:
                     red = green = blue = alpha = 0
