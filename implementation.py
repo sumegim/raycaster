@@ -430,14 +430,27 @@ class RaycastRendererImplementation(RaycastRenderer):
                 vc_vec_z = vc_base_z + z_k
 
                 c_prev = TFColor(0, 0, 0, 0)
-                default_gamma = 0.5
+                default_gamma = 0.2
 
                 for k in range(len(vec_k)):
                     vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     if vx < 1:
                         continue
 
+                    if True:
+                        if vx in colour_table.index:
                             c_i = colour_table.loc[vx]
+                        else:
+                            c_i = TFColor(np.random.rand(), np.random.rand(), np.random.rand())
+                    else:
+                        coords = np.asarray([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]])
+                        rgb_matrices = get_RGB_matrices_for_color_interpolation(volume, vc_vec_x[k], vc_vec_y[k],
+                                                                                vc_vec_z[k])
+                        red = single_trilinear_interpolation(coords, rgb_matrices[0])
+                        green = single_trilinear_interpolation(coords, rgb_matrices[1])
+                        blue = single_trilinear_interpolation(coords, rgb_matrices[2])
+                        c_i = TFColor(red, green, blue, default_gamma)
+
 
                     c_prev.r = c_i.r * default_gamma + (1 - default_gamma) * c_prev.r
                     c_prev.g = c_i.g * default_gamma + (1 - default_gamma) * c_prev.g
