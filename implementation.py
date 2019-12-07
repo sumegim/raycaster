@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 from genevis.render import RaycastRenderer
@@ -120,7 +120,7 @@ def get_matrix_for_value_interpolation(volume, x, y, z):
 
     return np.array(values)
 
-def get_RGB_matrices_for_color_interpolation(volume, x, y, z):
+def get_RGB_matrices_for_color_interpolation(volume: Volume, x: float, y: float, z: float) -> List[Volume]:
     basex = math.floor(x)
     basey = math.floor(y)
     basez = math.floor(z)
@@ -430,7 +430,7 @@ class RaycastRendererImplementation(RaycastRenderer):
         for i in tqdm(range(0, image_size, step)):
             for j in range(0, image_size, step):
 
-                vec_k = np.arange(100, -100, -2)
+                vec_k = np.arange(100, -100, -1)
                 x_k = vec_k * view_vector[0]
                 y_k = vec_k * view_vector[1]
                 z_k = vec_k * view_vector[2]
@@ -451,13 +451,13 @@ class RaycastRendererImplementation(RaycastRenderer):
                     if vx < 1:
                         continue
 
-                    if True:
+                    if False:
                         if vx in colour_table.index:
                             c_i = colour_table.loc[vx]
                         else:
                             c_i = TFColor(np.random.rand(), np.random.rand(), np.random.rand())
                     else:
-                        coords = np.asarray([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]])
+                        coords = np.array([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]])
                         rgb_matrices = get_RGB_matrices_for_color_interpolation(volume, vc_vec_x[k], vc_vec_y[k],
                                                                                 vc_vec_z[k])
                         red = single_trilinear_interpolation(coords, rgb_matrices[0])
@@ -769,14 +769,16 @@ class RaycastRendererImplementation(RaycastRenderer):
                 image[(j * image_size + i) * 4 + 2] = blue
                 image[(j * image_size + i) * 4 + 3] = alpha
 
-    def render_both(self, view_matrix: np.ndarray, energies_volumes: Dict[int, Volume], image_size: int, image: np.ndarray):
+    def render_both(self, view_matrix: np.ndarray, annotation_volume: Volume, areas_to_highlight: List[int], energies_volumes: Dict[int, Volume], image_size: int, image: np.ndarray):
         # Prepare volumes
 
         energies_volumes[0] = self.annotation_gradient_volume.get_magnitude_volume()
 
-        for energy_volume in energies_volumes.values():
+        for key, energy_volume in energies_volumes.items():
             # Normalize all data
             energy_volume.data = np.where(energy_volume.data < 0, energy_volume.data, energy_volume.data / energy_volume.data.max())
+            if key == 0:
+                energy_volume.data = np.where(np.isin(annotation_volume.data, areas_to_highlight), 5, energy_volume.data)
 
         shape = next(iter(energies_volumes.values())).data.shape
 
@@ -829,16 +831,18 @@ class RaycastRendererImplementation(RaycastRenderer):
                 c_prev = TFColor(0, 0, 0, 0)
 
                 for k in range(len(vec_k)):
-                    # red_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                    #                                         get_matrix_for_value_interpolation(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
-                    # green_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                    #                                         get_matrix_for_value_interpolation(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
-                    # blue_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                    #                                         get_matrix_for_value_interpolation(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                    if True:
+                        red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    else:
+                        red_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                                                                get_matrix_for_value_interpolation(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                        green_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                                                                get_matrix_for_value_interpolation(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                        blue_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                                                                get_matrix_for_value_interpolation(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
 
-                    red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
-                    green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
-                    blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
 
                     if red_vx <= 0.001 or green_vx <= 0.001 or blue_vx <= 0.001:
                         continue
@@ -869,7 +873,7 @@ class RaycastRendererImplementation(RaycastRenderer):
         if quick:
             self.render_slicer(view_matrix, annotation_volume, image_size, image)
         else:
-            self.render_both(view_matrix, energy_volumes, image_size, image)
+            self.render_both(view_matrix, annotation_volume, [15750, 15815], energy_volumes, image_size, image)
             # self.render_flat_surface(view_matrix, annotation_volume, image_size, image, see_through=True)
             # self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
             # self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
