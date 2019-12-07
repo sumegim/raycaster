@@ -21,9 +21,23 @@ colour_table = colour_table / 255                                               
 colour_table = colour_table.append(pd.Series([0,0,0], name=0, index=['r','g','b']))  # Add black
 
 # Get the genes colours
-genes_colours : Dict[int, Tuple[int, int, int]] = {}
-with open('genes_colours.pkl', 'rb') as f:
-    genes_colours = pickle.load(f)
+genes_colours: Dict[int, Tuple[int, int, int]] = {
+    0 : (30, 30, 30),
+    1: (0, 128, 255),
+    2: (255, 128, 0),
+    3: (0, 255, 0),
+    4: (255, 0, 0),
+    5: (255, 255, 0),
+    6: (0, 0, 255),
+    7: (0, 255, 128),
+    8: (0, 255, 255),
+    9: (128, 255, 0),
+    10: (128, 0, 255),
+    11: (255, 0, 255),
+    12: (255, 0, 128)
+    }
+# with open('genes_colours.pkl', 'rb') as f:
+#     genes_colours = pickle.load(f)
 
 def single_trilinear_interpolation(point_raw: np.ndarray, vertices_raw: np.ndarray) -> float:
     """
@@ -682,11 +696,10 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         # red_sum = np.zeros(shape); green_sum = np.zeros(shape); blue_sum = np.zeros(shape)
         intensity_sum = np.zeros(shape)
-        for gene, energy_volume in energies_volumes.items():
-            red_volume = red_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][0], np.zeros(shape))
-            green_volume = green_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][1], np.zeros(shape))
-            blue_volume = blue_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][2], np.zeros(shape))
-            
+        for i_color, energy_volume in enumerate(energies_volumes.values(), 1):
+            red_volume = red_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[i_color][0], np.zeros(shape))
+            green_volume = green_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[i_color][1], np.zeros(shape))
+            blue_volume = blue_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[i_color][2], np.zeros(shape))
             intensity_sum = intensity_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
         
         intensity_sum = np.around(intensity_sum, 3)
@@ -759,8 +772,7 @@ class RaycastRendererImplementation(RaycastRenderer):
     def render_both(self, view_matrix: np.ndarray, energies_volumes: Dict[int, Volume], image_size: int, image: np.ndarray):
         # Prepare volumes
 
-        energies_volumes[999] = self.annotation_gradient_volume.get_magnitude_volume()
-        genes_colours[999] = (100, 100, 100)
+        energies_volumes[0] = self.annotation_gradient_volume.get_magnitude_volume()
 
         for energy_volume in energies_volumes.values():
             # Normalize all data
@@ -774,10 +786,11 @@ class RaycastRendererImplementation(RaycastRenderer):
 
         # red_sum = np.zeros(shape); green_sum = np.zeros(shape); blue_sum = np.zeros(shape)
         intensity_sum = np.zeros(shape)
-        for gene, energy_volume in energies_volumes.items():
-            red_volume = red_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][0], np.zeros(shape))
-            green_volume = green_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][1], np.zeros(shape))
-            blue_volume = blue_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[gene][2], np.zeros(shape))
+        for i_color, key in enumerate(sorted(energies_volumes.keys())):
+            energy_volume = energies_volumes[key]
+            red_volume = red_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[i_color][0], np.zeros(shape))
+            green_volume = green_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[i_color][1], np.zeros(shape))
+            blue_volume = blue_volume + np.where(energy_volume.data > 0, energy_volume.data * genes_colours[i_color][2], np.zeros(shape))
 
             intensity_sum = intensity_sum + np.where(energy_volume.data > 0, energy_volume.data, np.zeros(shape))
 
