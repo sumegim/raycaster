@@ -873,7 +873,8 @@ class RaycastRendererImplementation(RaycastRenderer):
         if quick:
             self.render_slicer(view_matrix, annotation_volume, image_size, image)
         else:
-            self.render_both(view_matrix, annotation_volume, [15750, 15815], energy_volumes, image_size, image)
+            df = pd.read_csv("pink_ids.csv")
+            self.render_both(view_matrix, annotation_volume, df.values.T[0], energy_volumes, image_size, image)
             # self.render_flat_surface(view_matrix, annotation_volume, image_size, image, see_through=True)
             # self.render_annotation_compositing(view_matrix, annotation_volume, image_size, image)
             # self.add_phong_shading(view_matrix, annotation_volume, image_size, image)
