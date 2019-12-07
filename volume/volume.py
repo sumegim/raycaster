@@ -59,6 +59,7 @@ class GradientVolume:
         self.data : List[VoxelGradient] = []
         self.compute()
         self.max_magnitude = -1.0
+        self.magnitude_volume = None
 
     def get_gradient(self, x, y, z):
         x = int(math.floor(x))
@@ -86,6 +87,15 @@ class GradientVolume:
                     d_y = 0.5 * (self.volume.get_voxel(i, j+1, k) - self.volume.get_voxel(i, j-1, k))
                     d_z = 0.5 * (self.volume.get_voxel(i, j, k+1) - self.volume.get_voxel(i, j, k-1))
                     self.set_gradient(i, j, k, VoxelGradient(d_x, d_y, d_z))
+
+    def get_magnitude_volume(self):
+        if self.magnitude_volume is None:
+            self.magnitude_volume = np.zeros((self.volume.dim_x, self.volume.dim_y, self.volume.dim_z))
+            for i in range(1, self.volume.dim_x - 1):
+                for j in range(1, self.volume.dim_y - 1):
+                    for k in range(1, self.volume.dim_z - 1):
+                        self.magnitude_volume[i][j][k] = self.get_gradient(i, j, k).magnitude
+        return Volume(self.magnitude_volume)
 
     def get_max_gradient_magnitude(self):
         if self.max_magnitude < 0:
