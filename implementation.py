@@ -797,16 +797,25 @@ class RaycastRendererImplementation(RaycastRenderer):
 
                 c_prev = TFColor(0, 0, 0, 0)
                 for k in range(len(vec_k)):
-                    # red_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                    #                                         get_matrix_for_value_interpolation(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
-                    # green_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                    #                                         get_matrix_for_value_interpolation(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
-                    # blue_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                    #                                         get_matrix_for_value_interpolation(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                    if False:
+                        red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    else: 
+                        red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     
-                    red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
-                    green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
-                    blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        if red_vx <= 0.001 or green_vx <= 0.001 or blue_vx <= 0.001:
+                            continue
+                        
+                            red_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                                                                    get_matrix_for_value_interpolation(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                            green_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                                                                    get_matrix_for_value_interpolation(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                            blue_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
+                                                                get_matrix_for_value_interpolation(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                    
                     
                     if red_vx <= 0.001 or green_vx <= 0.001 or blue_vx <= 0.001:
                         continue
