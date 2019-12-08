@@ -344,7 +344,63 @@ class RaycastRendererImplementation(RaycastRenderer):
     def render_mip(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         # Clear the image
         self.clear_image()
-        self.vector_render_mip(view_matrix, volume, image_size, image)
+        # self.vector_render_mip(view_matrix, volume, image_size, image)
+        # return 
+        u_vector = view_matrix[0:3]
+        v_vector = view_matrix[4:7]
+        view_vector = view_matrix[8:11]
+
+        image_center = image_size / 2
+
+        volume_center = [volume.dim_x / 2, volume.dim_y / 2, volume.dim_z / 2]
+        volume_maximum = volume.get_maximum()
+
+        # Maximum ray length
+        diag = math.ceil(math.sqrt(volume.dim_x ^ 2 + volume.dim_y ^ 2 + volume.dim_z ^ 2))
+
+        step = 2 if self.interactive_mode else 1
+        for i in tqdm(range(0, image_size, step)):
+            for j in range(0, image_size, step):
+
+                vec_k = np.arange(100, -100, -20)
+                x_k = vec_k * view_vector[0]
+                y_k = vec_k * view_vector[1]
+                z_k = vec_k * view_vector[2]
+
+                vc_base_x = u_vector[0] * (i - image_center) + v_vector[0] * (j - image_center) + volume_center[0]
+                vc_base_y = u_vector[1] * (i - image_center) + v_vector[1] * (j - image_center) + volume_center[1]
+                vc_base_z = u_vector[2] * (i - image_center) + v_vector[2] * (j - image_center) + volume_center[2]
+
+                vc_vec_x = vc_base_x + x_k
+                vc_vec_y = vc_base_y + y_k
+                vc_vec_z = vc_base_z + z_k
+
+                max_vx = -math.inf
+                for k in range(len(vec_k)):
+                    if True:
+                        vx = get_voxel(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                    else:
+                        point = [vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]]
+                        vertices = get_matrix_for_value_interpolation(volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        vx = single_trilinear_interpolation(point, vertices)
+
+                    max_vx = vx if vx > max_vx else max_vx
+
+                red = max_vx / volume_maximum
+                green = red
+                blue = red
+                alpha = 1.0 if red > 0 else 0.0
+
+                red = math.floor(red * 255) if red < 255 else 255
+                green = math.floor(green * 255) if green < 255 else 255
+                blue = math.floor(blue * 255) if blue < 255 else 255
+                alpha = math.floor(alpha * 255) if alpha < 255 else 255
+
+                # Assign color to the pixel i, j
+                image[(j * image_size + i) * 4] = red
+                image[(j * image_size + i) * 4 + 1] = green
+                image[(j * image_size + i) * 4 + 2] = blue
+                image[(j * image_size + i) * 4 + 3] = alpha
 
     def render_compositing(self, view_matrix: np.ndarray, volume: Volume, image_size: int, image: np.ndarray):
         # Clear the image
