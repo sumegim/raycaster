@@ -584,9 +584,14 @@ class RaycastRendererImplementation(RaycastRenderer):
                         found = True
                         delta_f = self.annotation_gradient_volume.get_gradient(vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                         magnitude_f = delta_f.magnitude
-                        N[0] = delta_f.x / magnitude_f
-                        N[1] = delta_f.y / magnitude_f
-                        N[2] = delta_f.z / magnitude_f
+                        if magnitude_f < 0.001:
+                            N[0] = 0
+                            N[1] = 0
+                            N[2] = 0
+                        else:
+                            N[0] = delta_f.x / magnitude_f
+                            N[1] = delta_f.y / magnitude_f
+                            N[2] = delta_f.z / magnitude_f
                         break
 
                 # Normalize value to be between 0 and 1
@@ -831,21 +836,25 @@ class RaycastRendererImplementation(RaycastRenderer):
                 c_prev = TFColor(0, 0, 0, 0)
 
                 for k in range(len(vec_k)):
-                    if True:
+
+                    if False:
                         red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                         green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                         blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
                     else:
+                        red_vx = get_voxel(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        green_vx = get_voxel(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+                        blue_vx = get_voxel(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
+
+                        if red_vx <= 0.001 or green_vx <= 0.001 or blue_vx <= 0.001:
+                            continue
+
                         red_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
                                                                 get_matrix_for_value_interpolation(red_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
                         green_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                                                                get_matrix_for_value_interpolation(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
+                                                                  get_matrix_for_value_interpolation(green_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
                         blue_vx = single_trilinear_interpolation([vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]],
-                                                                get_matrix_for_value_interpolation(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
-
-
-                    if red_vx <= 0.001 or green_vx <= 0.001 or blue_vx <= 0.001:
-                        continue
+                                                                 get_matrix_for_value_interpolation(blue_volume, vc_vec_x[k], vc_vec_y[k], vc_vec_z[k]))
 
                     default_gamma = get_voxel(Volume(intensity_sum, compute_histogram=False),
                                               vc_vec_x[k], vc_vec_y[k], vc_vec_z[k])
@@ -871,7 +880,7 @@ class RaycastRendererImplementation(RaycastRenderer):
                            image_size: int, image: np.ndarray, quick: bool = False):
 
         if quick:
-            self.render_slicer(view_matrix, annotation_volume, image_size, image)
+            self.colored_q_slice(view_matrix, annotation_volume, image_size, image)
         else:
             df = pd.read_csv("pink_ids.csv")
             self.render_both(view_matrix, annotation_volume, df.values.T[0], energy_volumes, image_size, image)
